@@ -1,3 +1,9 @@
+"""Agent tool implementations backed by the banking data service.
+
+These tools are registered with the OpenAI Agents SDK and provide the model
+with safe, application-scoped access to customer banking information.
+"""
+
 from __future__ import annotations
 
 from agents import function_tool

@@ -1,3 +1,5 @@
+"""Minimal OCI Responses API connectivity check for local troubleshooting."""
+
 import os
 
 from dotenv import load_dotenv

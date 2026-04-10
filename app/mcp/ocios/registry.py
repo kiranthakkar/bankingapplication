@@ -1,3 +1,5 @@
+"""Tool registration helpers for the OCI Object Storage FastMCP server."""
+
 from app.mcp.ocios import tools
 
 
@@ -12,4 +14,8 @@ def register_tools(mcp) -> None:
 
 
 def register_resources(mcp) -> None:
+    """Register MCP resources.
+
+    The current Object Storage server exposes tools only, so this is a no-op.
+    """
     return None

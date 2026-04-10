@@ -1,3 +1,5 @@
+"""Client-side helper for connecting to the Object Storage MCP server."""
+
 from __future__ import annotations
 
 from agents.mcp import MCPServerStreamableHttp
@@ -7,6 +9,7 @@ from app.config import settings
 
 
 def build_ocios_server(access_token: str | None = None, request=None) -> MCPServerStreamableHttp | None:
+    """Return an authenticated MCP client for the Object Storage service."""
     if not settings.ocios_mcp_enabled:
         return None
     if access_token is None and request is not None:

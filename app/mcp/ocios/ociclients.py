@@ -1,3 +1,5 @@
+"""OCI SDK client helpers used by the Object Storage FastMCP server."""
+
 import oci
 from oci.auth.signers import TokenExchangeSigner
 from oci.object_storage import ObjectStorageClient
@@ -10,6 +12,7 @@ _signers_by_token_id: dict[str, TokenExchangeSigner] = {}
 
 
 def _build_oci_config(region: str | None = None) -> dict:
+    """Build the minimal OCI SDK config required for regional API clients."""
     resolved_region = (region or "").strip()
     if not resolved_region:
         raise ValueError("OCI region is required for the Object Storage MCP server.")
@@ -17,6 +20,7 @@ def _build_oci_config(region: str | None = None) -> dict:
 
 
 def _get_oci_domain_id() -> str:
+    """Extract the OCI Identity Domain identifier used for token exchange."""
     if not settings.idcs_domain:
         raise ValueError("IDCS_DOMAIN or OIDC_DISCOVERY_URL is required for OCI token exchange.")
 
@@ -27,6 +31,7 @@ def _get_oci_domain_id() -> str:
 
 
 def get_oci_signer(mcp_token) -> TokenExchangeSigner:
+    """Return a cached token-exchange signer for the current bearer token."""
     token_id = (getattr(mcp_token, "claims", None) or {}).get("jti") or getattr(mcp_token, "token", None)
     if not token_id:
         raise ValueError("Authenticated OCI Object Storage calls require a bearer token with a token identifier.")

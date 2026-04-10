@@ -1,3 +1,5 @@
+"""Top-level MCP integration helpers for the banking application."""
+
 from __future__ import annotations
 
 from agents.mcp import MCPServerManager
@@ -7,6 +9,7 @@ from app.mcp.sql import build_sqlcl_server
 
 
 def build_mcp_manager() -> MCPServerManager | None:
+    """Build the shared MCP manager used by the FastAPI lifespan hook."""
     servers = [server for server in (build_sqlcl_server(),) if server is not None]
     if not servers:
         return None

@@ -1,3 +1,5 @@
+"""SQLcl MCP server construction helpers for the banking application."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +10,7 @@ from app.config import settings
 
 
 def _resolve_sqlcl_command() -> str:
+    """Resolve the SQLcl executable path from the configured environment."""
     raw_path = settings.sqlcl_path
     if raw_path is None:
         raise ValueError("SQLCL_PATH is required when SQLcl MCP is enabled.")
@@ -19,6 +22,7 @@ def _resolve_sqlcl_command() -> str:
 
 
 def _resolve_sqlcl_args() -> list[str]:
+    """Return the SQLcl arguments required to start in MCP mode."""
     args = list(settings.sqlcl_mcp_args)
     if "-name" not in args and settings.sqlcl_connection_name:
         args.extend(["-name", settings.sqlcl_connection_name])
@@ -26,6 +30,7 @@ def _resolve_sqlcl_args() -> list[str]:
 
 
 def build_sqlcl_server() -> MCPServerStdio | None:
+    """Return the SQLcl stdio MCP server when SQLcl is enabled."""
     if not settings.sqlcl_enabled:
         return None
 
@@ -40,6 +45,7 @@ def build_sqlcl_server() -> MCPServerStdio | None:
 
 
 def build_sqlcl_manager() -> MCPServerManager | None:
+    """Return a manager that owns the SQLcl MCP server lifecycle."""
     server = build_sqlcl_server()
     if server is None:
         return None

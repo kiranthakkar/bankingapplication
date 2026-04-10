@@ -1,3 +1,5 @@
+"""Dataclass domain models used by the banking application."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,6 +9,7 @@ from typing import Literal
 
 @dataclass
 class Transaction:
+    """Represents one posted banking transaction."""
     id: str
     account_id: str
     posted_on: date
@@ -17,6 +20,7 @@ class Transaction:
 
 @dataclass
 class Account:
+    """Represents a banking account and its key display attributes."""
     id: str
     name: str
     kind: Literal["checking", "savings", "credit"]
@@ -31,6 +35,7 @@ class Account:
 
 @dataclass
 class Card:
+    """Represents a debit or credit card linked to a customer."""
     id: str
     name: str
     network: str
@@ -41,6 +46,7 @@ class Card:
 
 @dataclass
 class Customer:
+    """Represents a banking customer profile."""
     id: str
     full_name: str
     email: str

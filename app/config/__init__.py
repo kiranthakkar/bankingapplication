@@ -1,3 +1,9 @@
+"""Environment-backed application settings for the banking demo.
+
+The settings object in this module is used across the FastAPI app, the agents
+runtime, and the MCP integrations to keep configuration loading consistent.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -15,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _clean_env_value(name: str) -> str | None:
+    """Return a normalized environment-variable value with quotes trimmed."""
     raw = os.getenv(name)
     if raw is None:
         return None
@@ -23,12 +30,14 @@ def _clean_env_value(name: str) -> str | None:
 
 
 def _split_args(raw: str | None) -> list[str]:
+    """Split a shell-style whitespace-delimited argument string into tokens."""
     if not raw:
         return []
     return [part for part in raw.split() if part]
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
+    """Interpret a boolean environment variable using common truthy values."""
     raw = _clean_env_value(name)
     if raw is None:
         return default
@@ -36,6 +45,7 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 def _host_from_url(url: str | None) -> str | None:
+    """Extract the host portion from a URL string when present."""
     if not url:
         return None
     parsed = urlparse(url)
@@ -44,6 +54,7 @@ def _host_from_url(url: str | None) -> str | None:
 
 @dataclass(frozen=True)
 class Settings:
+    """Typed application settings resolved from the local environment."""
     app_name: str = "Agentic Banking Demo"
     model: str = _clean_env_value("OCI_MODEL") or "openai.gpt-oss-120b"
     oci_base_url: str | None = _clean_env_value("OCI_BASE_URL")
@@ -76,6 +87,7 @@ class Settings:
 
     @property
     def sqlcl_enabled(self) -> bool:
+        """Return ``True`` when SQLcl-backed Oracle access is fully configured."""
         return bool(self.sqlcl_path and self.sqlcl_connection_name)
 
 

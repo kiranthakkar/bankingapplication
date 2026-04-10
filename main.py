@@ -1,3 +1,9 @@
+"""FastAPI entrypoint for the agentic banking demo application.
+
+This module wires together authentication, the banking agent, Oracle-backed
+data access, statement storage, and the static frontend experience.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -41,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 def _message_needs_statement_mcp(message: str) -> bool:
+    """Return ``True`` when a chat request likely needs statement storage tools."""
     normalized = message.strip().lower()
     if not normalized:
         return False
@@ -63,6 +70,7 @@ def _message_needs_statement_mcp(message: str) -> bool:
 
 
 def _format_money(amount: float) -> str:
+    """Format a numeric amount as display-ready US currency text."""
     sign = "-" if amount < 0 else ""
     return f"{sign}${abs(amount):,.2f}"
 
@@ -95,6 +103,7 @@ def _format_fast_transactions_reply(account_label: str, transactions: list[dict]
 
 
 async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
+    """Handle simple balance, card, and transaction requests without agent runs."""
     normalized = message.strip().lower()
     identity_subject = user.get("sub")
     email = user.get("email")
@@ -131,6 +140,7 @@ async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
 
 
 def _bootstrap_unavailable_response(user: dict, message: str) -> dict:
+    """Build the bootstrap payload returned during banking-data outages."""
     return {
         "app_name": settings.app_name,
         "user": user,
@@ -143,6 +153,7 @@ def _bootstrap_unavailable_response(user: dict, message: str) -> dict:
 
 
 def _bootstrap_unlinked_response(user: dict, message: str) -> dict:
+    """Build the bootstrap payload returned when no customer link exists."""
     return {
         "app_name": settings.app_name,
         "user": user,
@@ -155,6 +166,7 @@ def _bootstrap_unlinked_response(user: dict, message: str) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manage shared MCP resources during FastAPI startup and shutdown."""
     manager = build_mcp_manager()
     if manager is not None:
         async with manager as connected_manager:

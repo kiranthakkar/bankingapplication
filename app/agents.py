@@ -1,3 +1,10 @@
+"""Agent definitions and runtime helpers for the banking assistant.
+
+This module configures the OpenAI Agents SDK against OCI's OpenAI-compatible
+endpoint, defines the specialist banking agents, and exposes the main helper
+used by the FastAPI application to run agent conversations.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -139,6 +146,7 @@ triage_agent = Agent(
 
 
 def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any]:
+    """Return the runtime agent, optionally enriched with MCP server access."""
     if not mcp_servers:
         return triage_agent
 
@@ -165,10 +173,12 @@ def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any
 
 
 def build_session(conversation_id: str) -> SQLiteSession:
+    """Create or reopen the persisted conversation session for one chat thread."""
     return SQLiteSession(conversation_id, str(CONVERSATIONS_DB_PATH))
 
 
 def _is_retryable_model_error(exc: Exception) -> bool:
+    """Return ``True`` when the OCI model failure is safe to retry."""
     return isinstance(exc, (InternalServerError, APIConnectionError, APITimeoutError))
 
 
@@ -177,6 +187,7 @@ async def run_banking_agent(
     message: str,
     mcp_servers: list[MCPServer] | None = None,
 ) -> str:
+    """Run one banking-agent turn with retries for transient OCI model failures."""
     session = build_session(conversation_id)
     runtime_agent = build_runtime_agent(mcp_servers)
     last_error: Exception | None = None

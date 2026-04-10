@@ -1,3 +1,9 @@
+"""Authentication helpers for OCI Identity Domain sign-in flows.
+
+This module centralizes OAuth client registration, session user resolution, and
+persisted access-token handling for downstream authenticated MCP calls.
+"""
+
 from __future__ import annotations
 
 import sqlite3
@@ -25,6 +31,7 @@ TOKEN_DB_PATH.parent.mkdir(exist_ok=True)
 
 
 def _get_connection() -> sqlite3.Connection:
+    """Return the SQLite connection used to store session-bound bearer tokens."""
     connection = sqlite3.connect(TOKEN_DB_PATH)
     connection.execute(
         """
@@ -52,6 +59,7 @@ def _get_connection() -> sqlite3.Connection:
 
 
 def get_current_user(request: Request) -> dict[str, Any]:
+    """Return the authenticated session user or raise ``401`` when absent."""
     user = request.session.get("user")
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required.")
@@ -59,6 +67,7 @@ def get_current_user(request: Request) -> dict[str, Any]:
 
 
 def maybe_user(request: Request) -> dict[str, Any] | None:
+    """Return the session user when present, otherwise ``None``."""
     user = request.session.get("user")
     if isinstance(user, dict):
         return user
@@ -66,12 +75,14 @@ def maybe_user(request: Request) -> dict[str, Any] | None:
 
 
 def clear_oidc_state(request: Request) -> None:
+    """Remove stale OIDC state entries left in the session store."""
     stale_keys = [key for key in request.session.keys() if "_state_oci_" in key]
     for key in stale_keys:
         request.session.pop(key, None)
 
 
 def store_access_token(request: Request, access_token: str | None) -> None:
+    """Persist the latest bearer token and bind it to the current web session."""
     clear_access_token(request)
     if not access_token:
         return
@@ -93,6 +104,7 @@ def store_access_token(request: Request, access_token: str | None) -> None:
 
 
 def get_access_token(request: Request) -> str | None:
+    """Return the bearer token associated with the current browser session."""
     token_key = request.session.get("access_token_key")
     session_binding = request.session.get("access_token_binding")
     with _get_connection() as connection:
@@ -121,6 +133,7 @@ def get_access_token(request: Request) -> str | None:
 
 
 def clear_access_token(request: Request) -> None:
+    """Delete the persisted access token associated with the current session."""
     token_key = request.session.pop("access_token_key", None)
     session_binding = request.session.pop("access_token_binding", None)
     with _get_connection() as connection:

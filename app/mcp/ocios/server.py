@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """FastMCP server for OCI Object Storage access over authenticated HTTP transport."""
+
+from __future__ import annotations
 
 import sys
 
@@ -14,9 +14,11 @@ from app.mcp.ocios.registry import register_resources, register_tools
 
 
 def log(message: str) -> None:
+    """Write startup messages to stderr so they appear in server logs."""
     print(message, file=sys.stderr, flush=True)
 
 def _build_auth_provider() -> JWTVerifier:
+    """Create the JWT verifier used to protect Object Storage MCP requests."""
     if not settings.idcs_domain:
         raise ValueError("IDCS_DOMAIN or OIDC_DISCOVERY_URL is required for OCI Object Storage MCP auth.")
 
@@ -29,6 +31,7 @@ def _build_auth_provider() -> JWTVerifier:
 
 
 async def health_check(request: Request) -> PlainTextResponse:
+    """Return a simple health response for connectivity checks."""
     return PlainTextResponse("OK")
 
 
@@ -45,6 +48,7 @@ mcp = create_mcp_server()
 
 
 def main() -> None:
+    """Start the Object Storage MCP server using streamable HTTP transport."""
     log("=" * 60)
     log("Starting Oracle Object Storage MCP Server")
     log("Transport: streamable-http")

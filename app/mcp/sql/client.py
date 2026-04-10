@@ -1,3 +1,9 @@
+"""Persistent SQL MCP client used by the banking data layer.
+
+This helper binds to the app's long-lived SQLcl MCP session, ensures the saved
+connection is established, and normalizes CSV tool output into Python rows.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -11,6 +17,7 @@ from app.config import settings
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize CSV row keys to lowercase and trim surrounding whitespace."""
     normalized: dict[str, Any] = {}
     for key, value in row.items():
         if isinstance(value, str):
@@ -21,12 +28,15 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 class SQLMCPClient:
+    """Wrap a shared SQLcl MCP session for reusable database access."""
+
     def __init__(self) -> None:
         self._server: MCPServer | None = None
         self._lock = Lock()
         self._connected = False
 
     async def bind_manager(self, manager: MCPServerManager | None) -> None:
+        """Bind this client to the SQLcl server from the shared MCP manager."""
         server: MCPServer | None = None
         if manager is not None:
             for candidate in manager.active_servers:
@@ -38,10 +48,12 @@ class SQLMCPClient:
             self._connected = False
 
     async def connect(self) -> None:
+        """Open the saved SQLcl connection for subsequent tool calls."""
         async with self._lock:
             await self._connect_locked()
 
     async def disconnect(self) -> None:
+        """Disconnect the saved SQLcl connection if it is currently open."""
         async with self._lock:
             if self._server is None or not self._connected:
                 self._connected = False
@@ -50,6 +62,7 @@ class SQLMCPClient:
             self._connected = False
 
     async def run_query(self, sql: str) -> list[dict[str, Any]]:
+        """Execute a SQL query and return the CSV result as normalized rows."""
         result = await self._call_tool(
             "run-sql",
             {
