@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agentic Banking Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="brand-lockup">
+          <img class="bank-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <p class="eyebrow">Agentic Banking Demo</p>
+        <p class="lede">
+          This starter app uses the OpenAI Agents SDK with specialist handoffs for
+          accounts, cards, and transfers.
+        </p>
+
+        <section class="snapshot-card">
+          <h2>Customer Snapshot</h2>
+          <div id="customer-summary" class="snapshot-grid">
+            <div class="empty-state empty-state-inline">Loading customer snapshot...</div>
+          </div>
+        </section>
+
+        <section class="snapshot-card">
+          <h2>Banking Details</h2>
+          <div class="tab-shell">
+            <div class="tab-list" role="tablist" aria-label="Banking details">
+              <button id="tab-accounts" class="tab-button is-active" type="button" role="tab" aria-selected="true">
+                Accounts
+              </button>
+              <button id="tab-cards" class="tab-button" type="button" role="tab" aria-selected="false">
+                Cards
+              </button>
+              <button id="tab-activity" class="tab-button" type="button" role="tab" aria-selected="false">
+                Recent Activity
+              </button>
+            </div>
+          </div>
+          <div id="details-status" class="section-actions">
+            <button id="load-active-tab" class="section-button" type="button">Load accounts</button>
+          </div>
+          <div class="details-panel">
+            <div id="accounts-list" class="stack-list detail-panel">
+              <div class="empty-state">Click "Load accounts" to fetch account details.</div>
+            </div>
+            <div id="cards-list" class="stack-list detail-panel is-hidden">
+              <div class="empty-state">Click "Load cards" to fetch linked cards.</div>
+            </div>
+            <div id="activity-list" class="stack-list detail-panel is-hidden">
+              <div class="empty-state">Click "Load recent activity" to fetch transactions.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="prompt-card">
+          <h2>Try asking</h2>
+          <div id="prompt-list" class="prompt-list"></div>
+        </section>
+      </aside>
+
+      <main class="chat-panel">
+        <div class="chat-header">
+          <div>
+            <p class="eyebrow">Conversation</p>
+            <h2>Banking Concierge</h2>
+          </div>
+          <div class="header-actions">
+            <nav class="page-nav" aria-label="Application pages">
+              <a class="page-link is-active" href="/">Dashboard</a>
+              <a class="page-link" href="/statements">Statements</a>
+              <a class="page-link" href="/profile">Profile</a>
+            </nav>
+            <a class="logout-link" href="/auth/logout">Sign out</a>
+          </div>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <form id="chat-form" class="composer">
+          <textarea
+            id="message-input"
+            rows="3"
+            placeholder="Ask about balances, transactions, cards, or transfers..."
+          ></textarea>
+          <div class="composer-actions">
+            <span id="data-source-hint" class="hint">Uses banking data and agent handoffs.</span>
+            <button type="submit">Send</button>
+          </div>
+        </form>
+      </main>
+    </div>
+
+    <script src="/static/bootstrap-cache.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

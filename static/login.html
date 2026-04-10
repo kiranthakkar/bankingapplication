@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In | Agentic Banking Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="login-shell">
+      <section class="login-card">
+        <div class="brand-lockup">
+          <img class="bank-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <p class="eyebrow">Agentic Banking Demo</p>
+        <h2>Sign in with your OCI Identity Domain</h2>
+        <button id="login-button" class="login-button" type="button">Continue to Sign In</button>
+      </section>
+    </div>
+    <script>
+      try {
+        window.sessionStorage.removeItem("banking.bootstrap.v1");
+      } catch (_error) {
+        // Ignore browser storage failures and continue.
+      }
+
+      const loginButton = document.getElementById("login-button");
+      loginButton.addEventListener("click", () => {
+        loginButton.disabled = true;
+        loginButton.textContent = "Redirecting...";
+        window.location.href = "/auth/login";
+      });
+    </script>
+  </body>
+</html>

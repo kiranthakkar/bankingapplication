@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile | Agentic Banking Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="brand-lockup">
+          <img class="bank-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <p class="eyebrow">Agentic Banking Demo</p>
+        <p class="lede">
+          Review the customer profile information available for this banking relationship.
+        </p>
+
+        <section class="snapshot-card">
+          <h2>Customer Snapshot</h2>
+          <div id="customer-summary" class="snapshot-grid">
+            <div class="empty-state empty-state-inline">Loading customer snapshot...</div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat-panel">
+        <div class="chat-header">
+          <div>
+            <p class="eyebrow">Profile</p>
+            <h2>Customer Profile</h2>
+          </div>
+          <div class="header-actions">
+            <nav class="page-nav" aria-label="Application pages">
+              <a class="page-link" href="/">Dashboard</a>
+              <a class="page-link" href="/statements">Statements</a>
+              <a class="page-link is-active" href="/profile">Profile</a>
+            </nav>
+            <a class="logout-link" href="/auth/logout">Sign out</a>
+          </div>
+        </div>
+
+        <section class="content-panel">
+          <div class="content-card">
+            <p class="eyebrow">Profile</p>
+            <h3>Customer Details</h3>
+            <div id="profile-details" class="profile-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/bootstrap-cache.js" defer></script>
+    <script src="/static/profile.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+openai
+openai-agents
+fastmcp
+fastapi
+uvicorn
+python-dotenv
+authlib
+itsdangerous
+oci

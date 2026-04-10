@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any
+
+
+_current_user: ContextVar[dict[str, Any] | None] = ContextVar("current_user", default=None)
+
+
+def get_authenticated_user() -> dict[str, Any] | None:
+    return _current_user.get()
+
+
+@contextmanager
+def authenticated_user_scope(user: dict[str, Any]):
+    token = _current_user.set(user)
+    try:
+        yield
+    finally:
+        _current_user.reset(token)

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Statements | Agentic Banking Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="brand-lockup">
+          <img class="bank-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <p class="eyebrow">Agentic Banking Demo</p>
+        <p class="lede">
+          Review statement-related content for the signed-in customer from the same banking profile.
+        </p>
+
+        <section class="snapshot-card">
+          <h2>Customer Snapshot</h2>
+          <div id="customer-summary" class="snapshot-grid">
+            <div class="empty-state empty-state-inline">Loading customer snapshot...</div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat-panel">
+        <div class="chat-header">
+          <div>
+            <p class="eyebrow">Statements</p>
+            <h2>Statements Center</h2>
+          </div>
+          <div class="header-actions">
+            <nav class="page-nav" aria-label="Application pages">
+              <a class="page-link" href="/">Dashboard</a>
+              <a class="page-link is-active" href="/statements">Statements</a>
+              <a class="page-link" href="/profile">Profile</a>
+            </nav>
+            <a class="logout-link" href="/auth/logout">Sign out</a>
+          </div>
+        </div>
+
+        <section class="content-panel">
+          <div class="content-card">
+            <p class="eyebrow">Overview</p>
+            <h3 id="statements-title">Monthly Statements</h3>
+            <p id="statements-description" class="lede compact">
+              Browse monthly banking statements for the current customer profile.
+            </p>
+            <div class="statement-actions">
+              <button id="generate-statements" class="section-button" type="button">
+                Generate demo statements
+              </button>
+            </div>
+          </div>
+          <div class="content-card">
+            <div class="tab-shell">
+              <div class="tab-list" role="tablist" aria-label="Statements">
+                <button id="tab-monthly" class="tab-button is-active" type="button" role="tab" aria-selected="true">
+                  Monthly Statements
+                </button>
+                <button id="tab-tax" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Tax Statements
+                </button>
+                <button id="tab-communications" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Communications
+                </button>
+              </div>
+            </div>
+          </div>
+          <div id="statements-preview" class="content-card stack-list"></div>
+          <div class="content-card">
+            <p class="eyebrow">Preview</p>
+            <h3 id="statement-detail-title">Statement Preview</h3>
+            <div id="statement-detail" class="empty-state">
+              Select a statement to preview its contents.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/bootstrap-cache.js" defer></script>
+    <script src="/static/statements.js" defer></script>
+  </body>
+</html>
