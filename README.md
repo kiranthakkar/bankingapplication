@@ -34,12 +34,12 @@ Current state:
 - `app/auth/`: OCI Identity Domain OIDC integration
 - `app/auth/__init__.py`: session handling plus persisted access-token storage for downstream authenticated MCP calls
 - `app/config/`: environment variable loading
-- `app/data/`: Oracle-backed banking data access, fallback service logic, and data-layer errors
+- `app/data/`: Oracle-backed banking data access and data-layer errors
 - `app/data/statements.py`: statement storage and retrieval service backed by the Object Storage MCP server
 - `app/mcp/`: MCP server integrations, including SQLcl and OCI Object Storage
 - `app/mcp/sql/`: SQLcl MCP integration
 - `app/mcp/ocios/`: OCI Object Storage FastMCP server and client wiring
-- `app/models/`: domain models and the in-memory demo repository
+- `app/models/`: domain models
 - `app/tools/`: agent tool functions
 - `app/user_context.py`: authenticated-user context passed into the chat/tool path
 - `db/schema.sql`: Oracle schema creation

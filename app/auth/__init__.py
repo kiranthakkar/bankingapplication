@@ -31,6 +31,7 @@ def _get_connection() -> sqlite3.Connection:
         create table if not exists auth_tokens (
             token_key text primary key,
             access_token text not null,
+            session_binding text,
             user_sub text,
             user_email text
         )
@@ -41,6 +42,8 @@ def _get_connection() -> sqlite3.Connection:
         for row in connection.execute("pragma table_info(auth_tokens)").fetchall()
         if len(row) > 1
     }
+    if "session_binding" not in columns:
+        connection.execute("alter table auth_tokens add column session_binding text")
     if "user_sub" not in columns:
         connection.execute("alter table auth_tokens add column user_sub text")
     if "user_email" not in columns:
@@ -73,73 +76,58 @@ def store_access_token(request: Request, access_token: str | None) -> None:
     if not access_token:
         return
     token_key = str(uuid4())
+    session_binding = str(uuid4())
     user = maybe_user(request) or {}
     user_sub = user.get("sub")
     user_email = user.get("email")
     with _get_connection() as connection:
         connection.execute(
             """
-            insert or replace into auth_tokens (token_key, access_token, user_sub, user_email)
-            values (?, ?, ?, ?)
+            insert or replace into auth_tokens (token_key, access_token, session_binding, user_sub, user_email)
+            values (?, ?, ?, ?, ?)
             """,
-            (token_key, access_token, user_sub, user_email),
+            (token_key, access_token, session_binding, user_sub, user_email),
         )
     request.session["access_token_key"] = token_key
+    request.session["access_token_binding"] = session_binding
 
 
 def get_access_token(request: Request) -> str | None:
     token_key = request.session.get("access_token_key")
+    session_binding = request.session.get("access_token_binding")
     with _get_connection() as connection:
         row = None
         if token_key:
             row = connection.execute(
-                "select token_key, access_token from auth_tokens where token_key = ?",
+                "select token_key, access_token, session_binding from auth_tokens where token_key = ?",
                 (token_key,),
             ).fetchone()
-        if not row:
-            user = maybe_user(request) or {}
-            user_sub = user.get("sub")
-            user_email = user.get("email")
-            if user_sub:
-                row = connection.execute(
-                    """
-                    select token_key, access_token
-                    from auth_tokens
-                    where user_sub = ?
-                    order by rowid desc
-                    limit 1
-                    """,
-                    (user_sub,),
-                ).fetchone()
-            if not row and user_email:
-                row = connection.execute(
-                    """
-                    select token_key, access_token
-                    from auth_tokens
-                    where lower(user_email) = lower(?)
-                    order by rowid desc
-                    limit 1
-                    """,
-                    (user_email,),
-                ).fetchone()
+        if not row and session_binding:
+            row = connection.execute(
+                """
+                select token_key, access_token, session_binding
+                from auth_tokens
+                where session_binding = ?
+                order by rowid desc
+                limit 1
+                """,
+                (session_binding,),
+            ).fetchone()
     if not row:
         return None
     request.session["access_token_key"] = str(row[0])
+    request.session["access_token_binding"] = str(row[2])
     return str(row[1])
 
 
 def clear_access_token(request: Request) -> None:
     token_key = request.session.pop("access_token_key", None)
-    user = maybe_user(request) or {}
-    user_sub = user.get("sub")
-    user_email = user.get("email")
+    session_binding = request.session.pop("access_token_binding", None)
     with _get_connection() as connection:
         if token_key:
             connection.execute("delete from auth_tokens where token_key = ?", (token_key,))
-        if user_sub:
-            connection.execute("delete from auth_tokens where user_sub = ?", (user_sub,))
-        elif user_email:
-            connection.execute("delete from auth_tokens where lower(user_email) = lower(?)", (user_email,))
+        if session_binding:
+            connection.execute("delete from auth_tokens where session_binding = ?", (session_binding,))
 
 
 __all__ = [

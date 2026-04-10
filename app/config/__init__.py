@@ -81,6 +81,9 @@ class Settings:
 
 settings = Settings()
 
+if settings.session_secret == "dev-session-secret-change-me":
+    raise ValueError("SESSION_SECRET must be set to a strong non-default value before starting the application.")
+
 logger.info(
     "Resolved OCI config: base_url=%s project_set=%s model=%s",
     settings.oci_base_url,

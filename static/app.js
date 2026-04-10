@@ -139,7 +139,6 @@ async function fetchJson(url) {
   if (!response.ok) {
     throw new Error(data.detail || "Request failed");
   }
-
   return data;
 }
 
@@ -152,7 +151,7 @@ async function loadSection(button, container, url, key, renderFn, emptyMessage) 
     const data = await fetchJson(url);
     const items = data[key] || [];
     if (!items.length) {
-      renderPlaceholder(container, emptyMessage);
+      renderPlaceholder(container, data.message || emptyMessage);
     } else {
       renderFn(items);
     }
