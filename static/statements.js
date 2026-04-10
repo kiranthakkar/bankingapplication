@@ -113,7 +113,6 @@ function renderStatementList(container, items, emptyMessage) {
         <article class="data-row statement-row">
           <div>
             <strong>${escapeHtml(item.title)}</strong>
-            <span class="meta">${escapeHtml(item.meta || "")}</span>
           </div>
           <button
             class="section-button statement-open-button"

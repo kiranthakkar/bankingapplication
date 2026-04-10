@@ -44,6 +44,7 @@ Current state:
 - `app/user_context.py`: authenticated-user context passed into the chat/tool path
 - `db/schema.sql`: Oracle schema creation
 - `db/seed.sql`: sample data load script
+- `startbank.sh`: convenience script to start the FastAPI banking app with the local virtual environment
 - `sanitycheck.py`: quick OCI model connectivity test
 - `requirements.txt`: Python dependencies
 
@@ -332,7 +333,20 @@ The server exposes a streamable HTTP MCP endpoint and a simple health endpoint a
 
 ## Start The Application
 
-Activate the virtual environment first, then start FastAPI with Uvicorn:
+The quickest way to start the banking application is:
+
+```bash
+cd /Users/kiranthakkar/Downloads/agentdemo/bankingapplication
+./startbank.sh
+```
+
+`startbank.sh`:
+
+- starts `main:app` with `uvicorn --reload`
+- uses `.venv/bin/uvicorn`
+- respects `HOST` and `PORT` if they are already set in your shell
+
+If you prefer to start it manually, activate the virtual environment first and run Uvicorn directly:
 
 ```bash
 cd /Users/kiranthakkar/Downloads/agentdemo/bankingapplication
