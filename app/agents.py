@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
+from openai import APIConnectionError
+from openai import APITimeoutError
 from openai import AsyncOpenAI
+from openai import InternalServerError
 from agents import (
     Agent,
     Runner,
@@ -40,6 +44,8 @@ def configure_model_client() -> None:
         base_url=settings.oci_base_url,
         api_key=settings.oci_api_key,
         project=settings.oci_project,
+        max_retries=4,
+        timeout=120.0,
     )
     set_default_openai_client(client, use_for_tracing=False)
     set_tracing_disabled(True)
@@ -162,6 +168,10 @@ def build_session(conversation_id: str) -> SQLiteSession:
     return SQLiteSession(conversation_id, str(CONVERSATIONS_DB_PATH))
 
 
+def _is_retryable_model_error(exc: Exception) -> bool:
+    return isinstance(exc, (InternalServerError, APIConnectionError, APITimeoutError))
+
+
 async def run_banking_agent(
     conversation_id: str,
     message: str,
@@ -169,5 +179,25 @@ async def run_banking_agent(
 ) -> str:
     session = build_session(conversation_id)
     runtime_agent = build_runtime_agent(mcp_servers)
-    result = await Runner.run(runtime_agent, message, session=session)
-    return str(result.final_output)
+    last_error: Exception | None = None
+
+    for attempt in range(1, 4):
+        try:
+            result = await Runner.run(runtime_agent, message, session=session)
+            return str(result.final_output)
+        except Exception as exc:
+            last_error = exc
+            if attempt == 3 or not _is_retryable_model_error(exc):
+                raise
+            delay_seconds = float(attempt)
+            logger.warning(
+                "Transient OCI model failure during chat run; retrying attempt %s/3 in %.1fs: %s",
+                attempt + 1,
+                delay_seconds,
+                type(exc).__name__,
+            )
+            await asyncio.sleep(delay_seconds)
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("The banking agent did not produce a response.")

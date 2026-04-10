@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -9,6 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from fastapi.responses import RedirectResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -38,6 +40,109 @@ DATA_DIR = BASE_DIR / "data"
 LOGO_PATH = BASE_DIR / "logo.png"
 DATA_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
+
+
+def _message_needs_statement_mcp(message: str) -> bool:
+    normalized = message.strip().lower()
+    if not normalized:
+        return False
+    keywords = {
+        "statement",
+        "statements",
+        "document",
+        "documents",
+        "tax",
+        "communication",
+        "communications",
+        "object storage",
+        "file",
+        "files",
+        "pdf",
+        "upload",
+        "download",
+    }
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _format_money(amount: float) -> str:
+    sign = "-" if amount < 0 else ""
+    return f"{sign}${abs(amount):,.2f}"
+
+
+def _format_fast_accounts_reply(accounts: list[dict]) -> str:
+    lines = ["Here are your current account balances:"]
+    for account in accounts:
+        lines.append(
+            f"- {account['name']} ({account['id']}): {_format_money(float(account['balance']))} {account.get('currency', 'USD')}"
+        )
+    return "\n".join(lines)
+
+
+def _format_fast_cards_reply(cards: list[dict]) -> str:
+    lines = ["Here are your linked cards:"]
+    for card in cards:
+        lines.append(
+            f"- {card['name']} ({card['id']}): {card['network']} ending in {card['last4']}, status {card['status']}"
+        )
+    return "\n".join(lines)
+
+
+def _format_fast_transactions_reply(account_label: str, transactions: list[dict]) -> str:
+    lines = [f"Here are the most recent transactions for {account_label}:"]
+    for item in transactions:
+        lines.append(
+            f"- {item['posted_on']}: {item['description']} ({item['category']}) {_format_money(float(item['amount']))}"
+        )
+    return "\n".join(lines)
+
+
+def _try_fast_chat_reply(message: str, user: dict) -> str | None:
+    normalized = message.strip().lower()
+    identity_subject = user.get("sub")
+    email = user.get("email")
+
+    if any(phrase in normalized for phrase in {"show me all my account balances", "show me my balances", "show my balances", "account balances", "all my account balances"}):
+        accounts = data_store.list_accounts(identity_subject=identity_subject, email=email)
+        if not accounts:
+            return "No accounts were found for the logged-in user."
+        return _format_fast_accounts_reply(accounts)
+
+    if any(phrase in normalized for phrase in {"what cards do i have", "show my cards", "list my cards", "what are my cards", "cards on my account"}):
+        cards = data_store.list_cards(identity_subject=identity_subject, email=email)
+        if not cards:
+            return "No cards were found for the logged-in user."
+        return _format_fast_cards_reply(cards)
+
+    if "recent" in normalized and "transaction" in normalized:
+        account_lookup = "checking"
+        if "savings" in normalized:
+            account_lookup = "savings"
+        elif "credit" in normalized or "card" in normalized:
+            account_lookup = "credit"
+        transactions = data_store.recent_transactions(
+            account_lookup,
+            limit=5,
+            identity_subject=identity_subject,
+            email=email,
+        )
+        if not transactions:
+            return f"No recent transactions were found for {account_lookup}."
+        return _format_fast_transactions_reply(account_lookup, transactions)
+
+    transfer_match = re.search(
+        r"transfer\s+\$?([0-9]+(?:\.[0-9]{1,2})?)\s+from\s+([A-Za-z0-9-]+)\s+to\s+([A-Za-z0-9-]+)(?:\s+for\s+(.+))?",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if transfer_match:
+        amount = float(transfer_match.group(1))
+        from_account = transfer_match.group(2)
+        to_account = transfer_match.group(3)
+        memo = (transfer_match.group(4) or "").strip().rstrip(".")
+        result = data_store.transfer(from_account, to_account, amount, memo)
+        return str(result.get("message") or "Transfer processed.")
+
+    return None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,6 +195,11 @@ async def profile_page(request: Request) -> FileResponse | RedirectResponse:
 @app.get("/logo.png", response_model=None)
 async def bank_logo() -> FileResponse:
     return FileResponse(LOGO_PATH)
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", response_model=None)
+async def chrome_devtools_probe() -> Response:
+    return Response(status_code=204)
 
 
 @app.get("/login", response_model=None)
@@ -298,29 +408,34 @@ async def chat(
 
     conversation_id = payload.conversation_id or str(uuid4())
     try:
-        mcp_manager = getattr(request.app.state, "mcp_manager", None)
-        mcp_servers = list(mcp_manager.active_servers) if mcp_manager else []
-        ocios_server = build_ocios_server(get_access_token(request))
-        data_store.ensure_customer_has_accounts(
-            identity_subject=_user.get("sub"),
-            email=_user.get("email"),
-        )
-        if ocios_server is not None:
-            async with MCPServerManager([ocios_server], strict=False) as ocios_manager:
-                mcp_servers.extend(ocios_manager.active_servers)
+        fast_reply = _try_fast_chat_reply(message, _user)
+        if fast_reply is not None:
+            return ChatResponse(conversation_id=conversation_id, reply=fast_reply)
 
+        if _message_needs_statement_mcp(message):
+            ocios_server = build_ocios_server(get_access_token(request))
+            if ocios_server is not None:
+                async with MCPServerManager([ocios_server], strict=False) as ocios_manager:
+                    active_servers = list(ocios_manager.active_servers)
+                    with authenticated_user_scope(_user):
+                        reply = await run_banking_agent(
+                            conversation_id,
+                            message,
+                            mcp_servers=active_servers or None,
+                        )
+            else:
                 with authenticated_user_scope(_user):
                     reply = await run_banking_agent(
                         conversation_id,
                         message,
-                        mcp_servers=mcp_servers,
+                        mcp_servers=None,
                     )
         else:
             with authenticated_user_scope(_user):
                 reply = await run_banking_agent(
                     conversation_id,
                     message,
-                    mcp_servers=mcp_servers or None,
+                    mcp_servers=None,
                 )
         return ChatResponse(conversation_id=conversation_id, reply=reply)
     except CustomerNotLinkedError as exc:
