@@ -9,12 +9,22 @@ const accountsEl = document.getElementById("accounts-list");
 const cardsEl = document.getElementById("cards-list");
 const activityEl = document.getElementById("activity-list");
 const dataSourceHintEl = document.getElementById("data-source-hint");
-const loadActiveTabButton = document.getElementById("load-active-tab");
 const tabAccountsButton = document.getElementById("tab-accounts");
 const tabCardsButton = document.getElementById("tab-cards");
 const tabActivityButton = document.getElementById("tab-activity");
 
 let activeTab = "accounts";
+let canLoadBankingDetails = false;
+const loadedTabs = {
+  accounts: false,
+  cards: false,
+  activity: false,
+};
+const loadingTabs = {
+  accounts: false,
+  cards: false,
+  activity: false,
+};
 
 function renderPlaceholder(container, text) {
   container.innerHTML = `<div class="empty-state">${text}</div>`;
@@ -93,9 +103,7 @@ const tabConfig = {
     key: "accounts",
     render: renderAccounts,
     emptyMessage: "No accounts were found for this customer.",
-    idleMessage: 'Click "Load accounts" to fetch account details.',
-    loadLabel: "Load accounts",
-    loadedLabel: "Accounts loaded",
+    idleMessage: "Account details will appear here.",
   },
   cards: {
     button: tabCardsButton,
@@ -104,9 +112,7 @@ const tabConfig = {
     key: "cards",
     render: renderCards,
     emptyMessage: "No cards were found for this customer.",
-    idleMessage: 'Click "Load cards" to fetch linked cards.',
-    loadLabel: "Load cards",
-    loadedLabel: "Cards loaded",
+    idleMessage: "Card details will appear here.",
   },
   activity: {
     button: tabActivityButton,
@@ -115,9 +121,7 @@ const tabConfig = {
     key: "recent_activity",
     render: renderActivity,
     emptyMessage: "No recent activity was found for this customer.",
-    idleMessage: 'Click "Load recent activity" to fetch transactions.',
-    loadLabel: "Load recent activity",
-    loadedLabel: "Activity loaded",
+    idleMessage: "Recent activity will appear here.",
   },
 };
 
@@ -142,9 +146,12 @@ async function fetchJson(url) {
   return data;
 }
 
-async function loadSection(button, container, url, key, renderFn, emptyMessage) {
-  button.disabled = true;
-  button.textContent = "Loading...";
+async function loadSection(tabName, container, url, key, renderFn, emptyMessage) {
+  if (loadedTabs[tabName] || loadingTabs[tabName] || !canLoadBankingDetails) {
+    return;
+  }
+
+  loadingTabs[tabName] = true;
   renderPlaceholder(container, "Loading...");
 
   try {
@@ -155,12 +162,24 @@ async function loadSection(button, container, url, key, renderFn, emptyMessage) 
     } else {
       renderFn(items);
     }
-    button.textContent = "Loaded";
+    loadedTabs[tabName] = true;
   } catch (error) {
     renderPlaceholder(container, error.message);
-    button.disabled = false;
-    button.textContent = button.dataset.defaultLabel;
+  } finally {
+    loadingTabs[tabName] = false;
   }
+}
+
+async function loadTab(tabName) {
+  const activeConfig = tabConfig[tabName];
+  await loadSection(
+    tabName,
+    activeConfig.container,
+    activeConfig.url,
+    activeConfig.key,
+    activeConfig.render,
+    activeConfig.emptyMessage
+  );
 }
 
 function setActiveTab(tabName) {
@@ -172,36 +191,8 @@ function setActiveTab(tabName) {
     config.button.setAttribute("aria-selected", isActive ? "true" : "false");
     config.container.classList.toggle("is-hidden", !isActive);
   });
-
-  const activeConfig = tabConfig[tabName];
-  loadActiveTabButton.textContent =
-    loadActiveTabButton.dataset[`${tabName}Loaded`] === "true"
-      ? activeConfig.loadedLabel
-      : activeConfig.loadLabel;
-  loadActiveTabButton.disabled = loadActiveTabButton.dataset.noMatchingAccount === "true";
-}
-
-async function loadActiveTab() {
-  const activeConfig = tabConfig[activeTab];
-  const loadedKey = `${activeTab}Loaded`;
-
-  if (loadActiveTabButton.dataset[loadedKey] === "true") {
-    return;
-  }
-
-  loadActiveTabButton.dataset.defaultLabel = activeConfig.loadLabel;
-  await loadSection(
-    loadActiveTabButton,
-    activeConfig.container,
-    activeConfig.url,
-    activeConfig.key,
-    activeConfig.render,
-    activeConfig.emptyMessage
-  );
-
-  if (loadActiveTabButton.textContent === "Loaded") {
-    loadActiveTabButton.dataset[loadedKey] = "true";
-    loadActiveTabButton.textContent = activeConfig.loadedLabel;
+  if (canLoadBankingDetails) {
+    void loadTab(tabName);
   }
 }
 
@@ -236,6 +227,7 @@ async function loadBootstrap() {
     : "Uses fallback demo banking data and agent handoffs.";
 
   if (data.no_matching_account) {
+    canLoadBankingDetails = false;
     summaryEl.innerHTML = `
       <div>
         <span class="label">Status</span>
@@ -249,12 +241,11 @@ async function loadBootstrap() {
     renderPlaceholder(accountsEl, data.message || "No matching account found for the logged-in user.");
     renderPlaceholder(cardsEl, data.message || "No matching account found for the logged-in user.");
     renderPlaceholder(activityEl, data.message || "No matching account found for the logged-in user.");
-    loadActiveTabButton.disabled = true;
-    loadActiveTabButton.dataset.noMatchingAccount = "true";
     addMessage("assistant", data.message || "No matching account found for the logged-in user.");
     return;
   }
 
+  canLoadBankingDetails = true;
   const customer = data.customer_summary.customer;
   const snapshot = data.customer_summary.snapshot;
   promptListEl.innerHTML = "";
@@ -294,14 +285,15 @@ async function loadBootstrap() {
 
   addMessage(
     "assistant",
-    `Hi, I’m your banking concierge. Your customer snapshot is ready, and I can load accounts, cards, and recent activity when you want them. Ask me for balances, transactions, card help, or transfers anytime.`
+    `Hi, I’m your banking concierge. Your customer snapshot is ready, and the banking tabs will load live account, card, and activity data automatically as you open them. Ask me for balances, transactions, card help, or transfers anytime.`
   );
+
+  await loadTab(activeTab);
 }
 
 tabAccountsButton.addEventListener("click", () => setActiveTab("accounts"));
 tabCardsButton.addEventListener("click", () => setActiveTab("cards"));
 tabActivityButton.addEventListener("click", () => setActiveTab("activity"));
-loadActiveTabButton.addEventListener("click", loadActiveTab);
 
 setActiveTab(activeTab);
 

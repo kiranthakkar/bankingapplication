@@ -568,8 +568,21 @@ h3 {
   overflow: hidden;
 }
 
-.login-card h1 {
-  max-width: 14ch;
+.login-card > * + * {
+  margin-top: 16px;
+}
+
+.login-card h1,
+.login-card h2 {
+  max-width: none;
+}
+
+.login-card .eyebrow {
+  margin-bottom: 0;
+}
+
+.login-card .login-button {
+  margin-top: 20px;
 }
 
 @media (max-width: 980px) {

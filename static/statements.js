@@ -38,6 +38,14 @@ function renderPlaceholder(container, text) {
   container.innerHTML = `<div class="empty-state">${text}</div>`;
 }
 
+function setGenerateButtonVisible(isVisible) {
+  const actions = generateButton?.closest(".statement-actions");
+  if (!actions) {
+    return;
+  }
+  actions.hidden = !isVisible;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -148,6 +156,23 @@ async function loadStatements(tabName, forceRefresh = false) {
   renderStatementList(previewEl, statementCache[tabName], statementTabs[tabName].emptyMessage);
 }
 
+async function primeStatementCache() {
+  const tabNames = Object.keys(statementTabs);
+  const responses = await Promise.all(
+    tabNames.map(async (tabName) => {
+      const data = await fetchJson(`/api/statements/${tabName}`);
+      return [tabName, data.items || []];
+    })
+  );
+
+  responses.forEach(([tabName, items]) => {
+    statementCache[tabName] = items;
+  });
+
+  const hasExistingStatements = responses.some(([, items]) => items.length > 0);
+  setGenerateButtonVisible(!hasExistingStatements);
+}
+
 async function setActiveStatementTab(tabName, forceRefresh = false) {
   activeStatementTab = tabName;
   Object.entries(statementTabs).forEach(([name, config]) => {
@@ -191,6 +216,7 @@ async function generateDemoStatements() {
     Object.keys(statementTabs).forEach((tabName) => {
       delete statementCache[tabName];
     });
+    setGenerateButtonVisible(false);
     detailEl.innerHTML = `Generated ${response.uploaded?.length || 0} demo statement objects.`;
     await setActiveStatementTab(activeStatementTab, true);
   } finally {
@@ -205,6 +231,7 @@ async function loadBootstrap() {
   renderSnapshot(data);
   if (data.no_matching_account) {
     generateButton.disabled = true;
+    setGenerateButtonVisible(true);
     renderPlaceholder(previewEl, data.message || "No matching account found for the logged-in user.");
     detailEl.innerHTML = data.message || "No matching account found for the logged-in user.";
   } else {
@@ -226,6 +253,7 @@ async function initializeStatementsPage() {
     if (data.no_matching_account) {
       return;
     }
+    await primeStatementCache();
     await setActiveStatementTab("monthly");
   } catch (error) {
     renderPlaceholder(summaryEl, error.message);
