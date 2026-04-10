@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from agents.mcp import MCPServerManager, MCPServerStdio
 
 from app.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_sqlcl_command() -> str:
@@ -32,8 +36,15 @@ def _resolve_sqlcl_args() -> list[str]:
 def build_sqlcl_server() -> MCPServerStdio | None:
     """Return the SQLcl stdio MCP server when SQLcl is enabled."""
     if not settings.sqlcl_enabled:
+        logger.info("SQLcl MCP server is disabled because SQLcl configuration is incomplete.")
         return None
 
+    logger.info(
+        "Building SQLcl MCP server for connection=%s command=%s",
+        settings.sqlcl_connection_name,
+        _resolve_sqlcl_command(),
+    )
+    logger.debug("SQLcl MCP args=%s", _resolve_sqlcl_args())
     return MCPServerStdio(
         name="sqlcl",
         cache_tools_list=True,
@@ -49,4 +60,5 @@ def build_sqlcl_manager() -> MCPServerManager | None:
     server = build_sqlcl_server()
     if server is None:
         return None
+    logger.debug("Creating standalone SQLcl MCP manager.")
     return MCPServerManager([server], strict=False)

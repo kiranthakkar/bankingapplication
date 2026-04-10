@@ -17,6 +17,19 @@ from dotenv import load_dotenv
 
 
 load_dotenv()
+
+
+def _setup_logging() -> None:
+    """Configure application logging once at import time."""
+    raw_level = (os.getenv("APP_LOG_LEVEL") or "INFO").strip().upper()
+    level = getattr(logging, raw_level, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
+
+_setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +69,7 @@ def _host_from_url(url: str | None) -> str | None:
 class Settings:
     """Typed application settings resolved from the local environment."""
     app_name: str = "Agentic Banking Demo"
+    app_log_level: str = (_clean_env_value("APP_LOG_LEVEL") or "INFO").upper()
     model: str = _clean_env_value("OCI_MODEL") or "openai.gpt-oss-120b"
     oci_base_url: str | None = _clean_env_value("OCI_BASE_URL")
     oci_api_key: str | None = _clean_env_value("OCI_GENAI_API_KEY")
@@ -96,6 +110,13 @@ settings = Settings()
 if settings.session_secret == "dev-session-secret-change-me":
     raise ValueError("SESSION_SECRET must be set to a strong non-default value before starting the application.")
 
+logger.info(
+    "Resolved app config: log_level=%s sqlcl_enabled=%s ocios_enabled=%s runtime_dir=%s",
+    settings.app_log_level,
+    settings.sqlcl_enabled,
+    settings.ocios_mcp_enabled,
+    settings.runtime_dir,
+)
 logger.info(
     "Resolved OCI config: base_url=%s project_set=%s model=%s",
     settings.oci_base_url,

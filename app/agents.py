@@ -148,6 +148,7 @@ triage_agent = Agent(
 def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any]:
     """Return the runtime agent, optionally enriched with MCP server access."""
     if not mcp_servers:
+        logger.debug("Building runtime agent without MCP servers.")
         return triage_agent
 
     mcp_guidance = (
@@ -162,6 +163,7 @@ def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any
         "Do not mention MCP, SQLcl, or internal storage tooling to the user."
     )
 
+    logger.info("Building runtime agent with %s MCP server(s).", len(mcp_servers))
     return Agent(
         name=triage_agent.name,
         model=triage_agent.model,
@@ -191,14 +193,27 @@ async def run_banking_agent(
     session = build_session(conversation_id)
     runtime_agent = build_runtime_agent(mcp_servers)
     last_error: Exception | None = None
+    logger.info(
+        "Starting banking agent run conversation_id=%s message_chars=%s mcp_servers=%s",
+        conversation_id,
+        len(message),
+        len(mcp_servers or []),
+    )
 
     for attempt in range(1, 4):
         try:
             result = await Runner.run(runtime_agent, message, session=session)
+            logger.info("Banking agent run succeeded conversation_id=%s attempt=%s", conversation_id, attempt)
             return str(result.final_output)
         except Exception as exc:
             last_error = exc
             if attempt == 3 or not _is_retryable_model_error(exc):
+                logger.info(
+                    "Banking agent run failed conversation_id=%s attempt=%s error=%s",
+                    conversation_id,
+                    attempt,
+                    type(exc).__name__,
+                )
                 raise
             delay_seconds = float(attempt)
             logger.warning(

@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from asyncio import Lock
 from typing import Any
 
 from agents.mcp import MCPServer, MCPServerManager
 
 from app.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -46,9 +50,11 @@ class SQLMCPClient:
         async with self._lock:
             self._server = server
             self._connected = False
+        logger.info("Bound persistent SQL MCP client to server_available=%s", server is not None)
 
     async def connect(self) -> None:
         """Open the saved SQLcl connection for subsequent tool calls."""
+        logger.info("Opening persistent SQL MCP connection for saved connection=%s", settings.sqlcl_connection_name)
         async with self._lock:
             await self._connect_locked()
 
@@ -60,9 +66,12 @@ class SQLMCPClient:
                 return
             await self._server.call_tool("disconnect", {"model": self._model_name})
             self._connected = False
+        logger.info("Disconnected persistent SQL MCP connection.")
 
     async def run_query(self, sql: str) -> list[dict[str, Any]]:
         """Execute a SQL query and return the CSV result as normalized rows."""
+        compact_sql = " ".join(sql.split())
+        logger.debug("Running SQL via MCP: %s", compact_sql[:500])
         result = await self._call_tool(
             "run-sql",
             {
@@ -73,8 +82,11 @@ class SQLMCPClient:
         )
         text = self._result_text(result).strip()
         if not text:
+            logger.debug("SQL query returned no rows.")
             return []
-        return self._parse_csv_rows(text)
+        rows = self._parse_csv_rows(text)
+        logger.debug("SQL query returned %s row(s).", len(rows))
+        return rows
 
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         async with self._lock:
@@ -82,15 +94,18 @@ class SQLMCPClient:
             if self._server is None:
                 raise RuntimeError("The SQL MCP server is not available.")
 
+            logger.debug("Calling SQL MCP tool=%s", tool_name)
             result = await self._server.call_tool(tool_name, arguments)
             detail = self._result_text(result)
             if result.isError and self._looks_disconnected(detail):
                 self._connected = False
+                logger.info("SQL MCP tool reported disconnected state; reconnecting and retrying tool=%s", tool_name)
                 await self._connect_locked()
                 result = await self._server.call_tool(tool_name, arguments)
                 detail = self._result_text(result)
 
             if result.isError:
+                logger.info("SQL MCP tool=%s failed: %s", tool_name, detail)
                 detail = detail or f"The SQL MCP tool '{tool_name}' returned an error."
                 raise RuntimeError(detail)
             return result
@@ -101,6 +116,11 @@ class SQLMCPClient:
         if self._server is None:
             raise RuntimeError("The SQL MCP server is not configured for this application.")
 
+        logger.debug(
+            "Connecting SQL MCP client with connection_name=%s model=%s",
+            settings.sqlcl_connection_name,
+            self._model_name,
+        )
         result = await self._server.call_tool(
             "connect",
             {
@@ -112,6 +132,7 @@ class SQLMCPClient:
         if result.isError:
             raise RuntimeError(detail or "Failed to connect to the SQL MCP server.")
         self._connected = True
+        logger.info("Connected SQL MCP client to saved connection=%s", settings.sqlcl_connection_name)
 
     @property
     def _model_name(self) -> str:

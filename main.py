@@ -46,6 +46,13 @@ DATA_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 
 
+def _user_log_context(user: dict | None) -> str:
+    """Return a compact log label for the current authenticated user."""
+    if not user:
+        return "anonymous"
+    return f"sub={user.get('sub')} email={user.get('email')}"
+
+
 def _message_needs_statement_mcp(message: str) -> bool:
     """Return ``True`` when a chat request likely needs statement storage tools."""
     normalized = message.strip().lower()
@@ -107,14 +114,17 @@ async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
     normalized = message.strip().lower()
     identity_subject = user.get("sub")
     email = user.get("email")
+    logger.debug("Evaluating fast chat path for %s", _user_log_context(user))
 
     if any(phrase in normalized for phrase in {"show me all my account balances", "show me my balances", "show my balances", "account balances", "all my account balances"}):
+        logger.info("Fast chat matched account balance request for %s", _user_log_context(user))
         accounts = await data_store.list_accounts(identity_subject=identity_subject, email=email)
         if not accounts:
             return "No accounts were found for the logged-in user."
         return _format_fast_accounts_reply(accounts)
 
     if any(phrase in normalized for phrase in {"what cards do i have", "show my cards", "list my cards", "what are my cards", "cards on my account"}):
+        logger.info("Fast chat matched card list request for %s", _user_log_context(user))
         cards = await data_store.list_cards(identity_subject=identity_subject, email=email)
         if not cards:
             return "No cards were found for the logged-in user."
@@ -126,6 +136,11 @@ async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
             account_lookup = "savings"
         elif "credit" in normalized or "card" in normalized:
             account_lookup = "credit"
+        logger.info(
+            "Fast chat matched recent transactions request for %s account_lookup=%s",
+            _user_log_context(user),
+            account_lookup,
+        )
         transactions = await data_store.recent_transactions(
             account_lookup,
             limit=5,
@@ -136,6 +151,7 @@ async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
             return f"No recent transactions were found for {account_lookup}."
         return _format_fast_transactions_reply(account_lookup, transactions)
 
+    logger.debug("Fast chat path did not match any shortcut for %s", _user_log_context(user))
     return None
 
 
@@ -167,21 +183,26 @@ def _bootstrap_unlinked_response(user: dict, message: str) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage shared MCP resources during FastAPI startup and shutdown."""
+    logger.info("Starting FastAPI application lifespan.")
     manager = build_mcp_manager()
     if manager is not None:
         async with manager as connected_manager:
             app.state.mcp_manager = connected_manager
             await data_store.start(connected_manager)
             try:
+                logger.info("Application startup completed with shared MCP manager.")
                 yield
             finally:
+                logger.info("Shutting down application resources.")
                 await data_store.stop()
     else:
         app.state.mcp_manager = None
         await data_store.start(None)
         try:
+            logger.info("Application startup completed without shared MCP manager.")
             yield
         finally:
+            logger.info("Shutting down application resources.")
             await data_store.stop()
 
 
@@ -203,6 +224,7 @@ class ChatResponse(BaseModel):
 @app.get("/", response_model=None)
 async def index(request: Request) -> FileResponse | RedirectResponse:
     if not maybe_user(request):
+        logger.debug("Redirecting anonymous user from / to /login")
         return RedirectResponse(url="/login", status_code=302)
     return FileResponse(STATIC_DIR / "index.html")
 
@@ -210,6 +232,7 @@ async def index(request: Request) -> FileResponse | RedirectResponse:
 @app.get("/statements", response_model=None)
 async def statements_page(request: Request) -> FileResponse | RedirectResponse:
     if not maybe_user(request):
+        logger.debug("Redirecting anonymous user from /statements to /login")
         return RedirectResponse(url="/login", status_code=302)
     return FileResponse(STATIC_DIR / "statements.html")
 
@@ -217,6 +240,7 @@ async def statements_page(request: Request) -> FileResponse | RedirectResponse:
 @app.get("/profile", response_model=None)
 async def profile_page(request: Request) -> FileResponse | RedirectResponse:
     if not maybe_user(request):
+        logger.debug("Redirecting anonymous user from /profile to /login")
         return RedirectResponse(url="/login", status_code=302)
     return FileResponse(STATIC_DIR / "profile.html")
 
@@ -228,6 +252,7 @@ async def bank_logo() -> FileResponse:
 @app.get("/login", response_model=None)
 async def login_page(request: Request) -> FileResponse | RedirectResponse:
     if maybe_user(request):
+        logger.debug("Redirecting authenticated user from /login to /")
         return RedirectResponse(url="/", status_code=302)
     return FileResponse(STATIC_DIR / "login.html")
 
@@ -235,10 +260,12 @@ async def login_page(request: Request) -> FileResponse | RedirectResponse:
 @app.get("/auth/login", response_model=None)
 async def auth_login(request: Request):
     if maybe_user(request):
+        logger.debug("Skipping auth/login because session is already authenticated.")
         return RedirectResponse(url="/", status_code=302)
 
     clear_oidc_state(request)
     redirect_uri = settings.oidc_redirect_uri
+    logger.info("Starting OIDC login redirect redirect_uri=%s", redirect_uri)
     return await oauth.oci.authorize_redirect(request, redirect_uri)
 
 
@@ -247,6 +274,7 @@ async def auth_callback(request: Request) -> RedirectResponse:
     try:
         token = await oauth.oci.authorize_access_token(request)
     except MismatchingStateError:
+        logger.info("OIDC callback failed due to mismatching state.")
         clear_access_token(request)
         clear_oidc_state(request)
         request.session.pop("user", None)
@@ -263,6 +291,11 @@ async def auth_callback(request: Request) -> RedirectResponse:
         "email": userinfo.get("email"),
         "preferred_username": userinfo.get("preferred_username"),
     }
+    logger.info(
+        "OIDC callback succeeded for sub=%s email=%s",
+        userinfo.get("sub"),
+        userinfo.get("email"),
+    )
     store_access_token(request, token.get("access_token") or token.get("id_token"))
     return RedirectResponse(
         url="/",
@@ -277,6 +310,7 @@ async def auth_callback(request: Request) -> RedirectResponse:
 
 @app.get("/auth/logout", response_model=None)
 async def auth_logout(request: Request) -> RedirectResponse:
+    logger.info("Logging out session user=%s", _user_log_context(maybe_user(request)))
     clear_access_token(request)
     request.session.clear()
     return RedirectResponse(url="/login", status_code=302)
@@ -285,6 +319,7 @@ async def auth_logout(request: Request) -> RedirectResponse:
 @app.get("/api/bootstrap")
 async def bootstrap(user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling bootstrap request for %s", _user_log_context(user))
         identity_subject = user.get("sub")
         email = user.get("email")
         customer_summary = await data_store.get_customer_summary(
@@ -316,14 +351,17 @@ async def bootstrap(user: dict = Depends(get_current_user)) -> dict:
             ],
         }
     except CustomerNotLinkedError as exc:
+        logger.info("Bootstrap found no linked account for %s", _user_log_context(user))
         return _bootstrap_unlinked_response(user, str(exc))
     except BankingDataUnavailableError as exc:
+        logger.info("Bootstrap found banking data unavailable for %s", _user_log_context(user))
         return _bootstrap_unavailable_response(user, str(exc))
 
 
 @app.get("/api/accounts")
 async def get_accounts(user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling accounts request for %s", _user_log_context(user))
         return {
             "accounts": await data_store.list_accounts(
                 identity_subject=user.get("sub"),
@@ -331,14 +369,17 @@ async def get_accounts(user: dict = Depends(get_current_user)) -> dict:
             )
         }
     except CustomerNotLinkedError as exc:
+        logger.info("Accounts request found no linked account for %s", _user_log_context(user))
         return {"accounts": [], "message": str(exc)}
     except BankingDataUnavailableError as exc:
+        logger.info("Accounts request found banking data unavailable for %s", _user_log_context(user))
         return {"accounts": [], "message": str(exc), "data_unavailable": True}
 
 
 @app.get("/api/cards")
 async def get_cards(user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling cards request for %s", _user_log_context(user))
         return {
             "cards": await data_store.list_cards(
                 identity_subject=user.get("sub"),
@@ -346,14 +387,17 @@ async def get_cards(user: dict = Depends(get_current_user)) -> dict:
             )
         }
     except CustomerNotLinkedError as exc:
+        logger.info("Cards request found no linked account for %s", _user_log_context(user))
         return {"cards": [], "message": str(exc)}
     except BankingDataUnavailableError as exc:
+        logger.info("Cards request found banking data unavailable for %s", _user_log_context(user))
         return {"cards": [], "message": str(exc), "data_unavailable": True}
 
 
 @app.get("/api/activity")
 async def get_recent_activity(user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling recent activity request for %s", _user_log_context(user))
         return {
             "recent_activity": await data_store.recent_activity(
                 identity_subject=user.get("sub"),
@@ -361,22 +405,27 @@ async def get_recent_activity(user: dict = Depends(get_current_user)) -> dict:
             )
         }
     except CustomerNotLinkedError as exc:
+        logger.info("Recent activity request found no linked account for %s", _user_log_context(user))
         return {"recent_activity": [], "message": str(exc)}
     except BankingDataUnavailableError as exc:
+        logger.info("Recent activity request found banking data unavailable for %s", _user_log_context(user))
         return {"recent_activity": [], "message": str(exc), "data_unavailable": True}
 
 
 @app.post("/api/statements/generate-demo")
 async def generate_demo_statements(request: Request, user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling statement generation request for %s", _user_log_context(user))
         return await statement_store.generate_demo_documents(
             request,
             identity_subject=user.get("sub"),
             email=user.get("email"),
         )
     except CustomerNotLinkedError as exc:
+        logger.info("Statement generation found no linked account for %s", _user_log_context(user))
         return {"success": False, "message": str(exc), "items": []}
     except BankingDataUnavailableError as exc:
+        logger.info("Statement generation found banking data unavailable for %s", _user_log_context(user))
         return {"success": False, "message": str(exc), "items": [], "data_unavailable": True}
     except Exception as exc:
         logger.exception("Failed to generate demo statements")
@@ -386,6 +435,7 @@ async def generate_demo_statements(request: Request, user: dict = Depends(get_cu
 @app.get("/api/statements/{category}")
 async def get_statements(category: str, request: Request, user: dict = Depends(get_current_user)) -> dict:
     try:
+        logger.info("Handling statement list request category=%s for %s", category, _user_log_context(user))
         return await statement_store.list_documents(
             request,
             category=category,
@@ -393,8 +443,10 @@ async def get_statements(category: str, request: Request, user: dict = Depends(g
             email=user.get("email"),
         )
     except CustomerNotLinkedError as exc:
+        logger.info("Statement list found no linked account for %s", _user_log_context(user))
         return {"category": category, "items": [], "message": str(exc)}
     except BankingDataUnavailableError as exc:
+        logger.info("Statement list found banking data unavailable for %s", _user_log_context(user))
         return {"category": category, "items": [], "message": str(exc), "data_unavailable": True}
     except Exception as exc:
         logger.exception("Failed to fetch statements for category %s", category)
@@ -409,6 +461,12 @@ async def get_statement_content(
     user: dict = Depends(get_current_user),
 ) -> dict:
     try:
+        logger.info(
+            "Handling statement content request category=%s object_name=%s for %s",
+            category,
+            object_name,
+            _user_log_context(user),
+        )
         return await statement_store.get_document(
             request,
             category=category,
@@ -437,15 +495,28 @@ async def chat(
 
     conversation_id = payload.conversation_id or str(uuid4())
     try:
+        logger.info(
+            "Handling chat request conversation_id=%s for %s",
+            conversation_id,
+            _user_log_context(_user),
+        )
+        logger.debug("Chat request message=%s", message)
         fast_reply = await _try_fast_chat_reply(message, _user)
         if fast_reply is not None:
+            logger.info("Returning fast chat reply conversation_id=%s", conversation_id)
             return ChatResponse(conversation_id=conversation_id, reply=fast_reply)
 
         if _message_needs_statement_mcp(message):
+            logger.info("Chat request conversation_id=%s requires statement MCP access", conversation_id)
             ocios_server = build_ocios_server(get_access_token(request))
             if ocios_server is not None:
                 async with MCPServerManager([ocios_server], strict=False) as ocios_manager:
                     active_servers = list(ocios_manager.active_servers)
+                    logger.debug(
+                        "Chat request conversation_id=%s using %s statement MCP server(s)",
+                        conversation_id,
+                        len(active_servers),
+                    )
                     with authenticated_user_scope(_user):
                         reply = await run_banking_agent(
                             conversation_id,
@@ -453,6 +524,7 @@ async def chat(
                             mcp_servers=active_servers or None,
                         )
             else:
+                logger.info("Statement MCP was requested but no Object Storage server was available.")
                 with authenticated_user_scope(_user):
                     reply = await run_banking_agent(
                         conversation_id,
@@ -460,16 +532,20 @@ async def chat(
                         mcp_servers=None,
                     )
         else:
+            logger.debug("Chat request conversation_id=%s using runtime agent without statement MCP", conversation_id)
             with authenticated_user_scope(_user):
                 reply = await run_banking_agent(
                     conversation_id,
                     message,
                     mcp_servers=None,
                 )
+        logger.info("Completed chat request conversation_id=%s", conversation_id)
         return ChatResponse(conversation_id=conversation_id, reply=reply)
     except CustomerNotLinkedError as exc:
+        logger.info("Chat request found no linked account for %s", _user_log_context(_user))
         return ChatResponse(conversation_id=conversation_id, reply=str(exc))
     except BankingDataUnavailableError as exc:
+        logger.info("Chat request found banking data unavailable for %s", _user_log_context(_user))
         return ChatResponse(conversation_id=conversation_id, reply=str(exc))
     except Exception as exc:
         logger.exception("Chat request failed for conversation %s", conversation_id)

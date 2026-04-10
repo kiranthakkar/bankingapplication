@@ -199,6 +199,12 @@ Notes:
   Optional directory for runtime SQLite files such as auth token storage and agent conversation history.
   If not set, the app uses a temp directory outside the project tree so `uvicorn --reload` does not restart on every SQLite write.
 
+- `APP_LOG_LEVEL`
+  Python application log level.
+  Default:
+  `INFO`
+  Set this to `DEBUG` when you want detailed request, cache, SQL MCP, and statement-storage tracing.
+
 - `PORT`
   Local FastAPI port.
   Default:
@@ -232,6 +238,7 @@ OCIOS_MCP_URL=http://127.0.0.1:9001/mcp
 STATEMENTS_REGION=us-ashburn-1
 STATEMENTS_BUCKET=banking-statements-demo
 APP_RUNTIME_DIR=/tmp/agentic-banking-demo
+APP_LOG_LEVEL=INFO
 
 PORT=8000
 ```
