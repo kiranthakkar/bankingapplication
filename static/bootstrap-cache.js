@@ -94,5 +94,4 @@
   bindLogoutCacheClear();
 
   window.loadBootstrapData = loadBootstrapData;
-  window.clearBootstrapCache = clearCache;
 })();

@@ -21,7 +21,13 @@ from starlette.background import BackgroundTask
 from starlette.middleware.sessions import SessionMiddleware
 from agents.mcp import MCPServerManager
 
-from app.agents import run_banking_agent
+from app.agents import (
+    run_activity_view_agent,
+    run_accounts_view_agent,
+    run_banking_agent,
+    run_bootstrap_view_agent,
+    run_cards_view_agent,
+)
 from app.auth import (
     MismatchingStateError,
     clear_access_token,
@@ -40,9 +46,7 @@ from app.user_context import authenticated_user_scope
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DATA_DIR = BASE_DIR / "data"
 LOGO_PATH = BASE_DIR / "logo.png"
-DATA_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 
 
@@ -74,85 +78,6 @@ def _message_needs_statement_mcp(message: str) -> bool:
         "download",
     }
     return any(keyword in normalized for keyword in keywords)
-
-
-def _format_money(amount: float) -> str:
-    """Format a numeric amount as display-ready US currency text."""
-    sign = "-" if amount < 0 else ""
-    return f"{sign}${abs(amount):,.2f}"
-
-
-def _format_fast_accounts_reply(accounts: list[dict]) -> str:
-    lines = ["Here are your current account balances:"]
-    for account in accounts:
-        lines.append(
-            f"- {account['name']} ({account['id']}): {_format_money(float(account['balance']))} {account.get('currency', 'USD')}"
-        )
-    return "\n".join(lines)
-
-
-def _format_fast_cards_reply(cards: list[dict]) -> str:
-    lines = ["Here are your linked cards:"]
-    for card in cards:
-        lines.append(
-            f"- {card['name']} ({card['id']}): {card['network']} ending in {card['last4']}, status {card['status']}"
-        )
-    return "\n".join(lines)
-
-
-def _format_fast_transactions_reply(account_label: str, transactions: list[dict]) -> str:
-    lines = [f"Here are the most recent transactions for {account_label}:"]
-    for item in transactions:
-        lines.append(
-            f"- {item['posted_on']}: {item['description']} ({item['category']}) {_format_money(float(item['amount']))}"
-        )
-    return "\n".join(lines)
-
-
-async def _try_fast_chat_reply(message: str, user: dict) -> str | None:
-    """Handle simple balance, card, and transaction requests without agent runs."""
-    normalized = message.strip().lower()
-    identity_subject = user.get("sub")
-    email = user.get("email")
-    logger.debug("Evaluating fast chat path for %s", _user_log_context(user))
-
-    if any(phrase in normalized for phrase in {"show me all my account balances", "show me my balances", "show my balances", "account balances", "all my account balances"}):
-        logger.info("Fast chat matched account balance request for %s", _user_log_context(user))
-        accounts = await data_store.list_accounts(identity_subject=identity_subject, email=email)
-        if not accounts:
-            return "No accounts were found for the logged-in user."
-        return _format_fast_accounts_reply(accounts)
-
-    if any(phrase in normalized for phrase in {"what cards do i have", "show my cards", "list my cards", "what are my cards", "cards on my account"}):
-        logger.info("Fast chat matched card list request for %s", _user_log_context(user))
-        cards = await data_store.list_cards(identity_subject=identity_subject, email=email)
-        if not cards:
-            return "No cards were found for the logged-in user."
-        return _format_fast_cards_reply(cards)
-
-    if "recent" in normalized and "transaction" in normalized:
-        account_lookup = "checking"
-        if "savings" in normalized:
-            account_lookup = "savings"
-        elif "credit" in normalized or "card" in normalized:
-            account_lookup = "credit"
-        logger.info(
-            "Fast chat matched recent transactions request for %s account_lookup=%s",
-            _user_log_context(user),
-            account_lookup,
-        )
-        transactions = await data_store.recent_transactions(
-            account_lookup,
-            limit=5,
-            identity_subject=identity_subject,
-            email=email,
-        )
-        if not transactions:
-            return f"No recent transactions were found for {account_lookup}."
-        return _format_fast_transactions_reply(account_lookup, transactions)
-
-    logger.debug("Fast chat path did not match any shortcut for %s", _user_log_context(user))
-    return None
 
 
 def _bootstrap_unavailable_response(user: dict, message: str) -> dict:
@@ -320,35 +245,13 @@ async def auth_logout(request: Request) -> RedirectResponse:
 async def bootstrap(user: dict = Depends(get_current_user)) -> dict:
     try:
         logger.info("Handling bootstrap request for %s", _user_log_context(user))
-        identity_subject = user.get("sub")
-        email = user.get("email")
-        customer_summary = await data_store.get_customer_summary(
-            identity_subject=identity_subject,
-            email=email,
-        )
-        snapshot = customer_summary.get("snapshot", {})
-        linked_accounts = int(snapshot.get("linked_accounts", 0) or 0)
-        if linked_accounts == 0:
-            return {
-                "app_name": settings.app_name,
-                "user": user,
-                "data_source": "oracle_sqlcl",
-                "customer_summary": None,
-                "no_matching_account": True,
-                "message": "No matching account found for the logged-in user.",
-                "suggested_prompts": [],
-            }
+        with authenticated_user_scope(user):
+            payload = await run_bootstrap_view_agent()
         return {
             "app_name": settings.app_name,
             "user": user,
             "data_source": "oracle_sqlcl",
-            "customer_summary": customer_summary,
-            "suggested_prompts": [
-                "Show me all my account balances.",
-                "What are my most recent checking transactions?",
-                "Transfer $200 from CHK-001 to SAV-001 for my vacation fund.",
-                "Freeze my debit card.",
-            ],
+            **payload,
         }
     except CustomerNotLinkedError as exc:
         logger.info("Bootstrap found no linked account for %s", _user_log_context(user))
@@ -362,12 +265,8 @@ async def bootstrap(user: dict = Depends(get_current_user)) -> dict:
 async def get_accounts(user: dict = Depends(get_current_user)) -> dict:
     try:
         logger.info("Handling accounts request for %s", _user_log_context(user))
-        return {
-            "accounts": await data_store.list_accounts(
-                identity_subject=user.get("sub"),
-                email=user.get("email"),
-            )
-        }
+        with authenticated_user_scope(user):
+            return await run_accounts_view_agent()
     except CustomerNotLinkedError as exc:
         logger.info("Accounts request found no linked account for %s", _user_log_context(user))
         return {"accounts": [], "message": str(exc)}
@@ -380,12 +279,8 @@ async def get_accounts(user: dict = Depends(get_current_user)) -> dict:
 async def get_cards(user: dict = Depends(get_current_user)) -> dict:
     try:
         logger.info("Handling cards request for %s", _user_log_context(user))
-        return {
-            "cards": await data_store.list_cards(
-                identity_subject=user.get("sub"),
-                email=user.get("email"),
-            )
-        }
+        with authenticated_user_scope(user):
+            return await run_cards_view_agent()
     except CustomerNotLinkedError as exc:
         logger.info("Cards request found no linked account for %s", _user_log_context(user))
         return {"cards": [], "message": str(exc)}
@@ -398,12 +293,8 @@ async def get_cards(user: dict = Depends(get_current_user)) -> dict:
 async def get_recent_activity(user: dict = Depends(get_current_user)) -> dict:
     try:
         logger.info("Handling recent activity request for %s", _user_log_context(user))
-        return {
-            "recent_activity": await data_store.recent_activity(
-                identity_subject=user.get("sub"),
-                email=user.get("email"),
-            )
-        }
+        with authenticated_user_scope(user):
+            return await run_activity_view_agent()
     except CustomerNotLinkedError as exc:
         logger.info("Recent activity request found no linked account for %s", _user_log_context(user))
         return {"recent_activity": [], "message": str(exc)}
@@ -501,11 +392,6 @@ async def chat(
             _user_log_context(_user),
         )
         logger.debug("Chat request message=%s", message)
-        fast_reply = await _try_fast_chat_reply(message, _user)
-        if fast_reply is not None:
-            logger.info("Returning fast chat reply conversation_id=%s", conversation_id)
-            return ChatResponse(conversation_id=conversation_id, reply=fast_reply)
-
         if _message_needs_statement_mcp(message):
             logger.info("Chat request conversation_id=%s requires statement MCP access", conversation_id)
             ocios_server = build_ocios_server(get_access_token(request))

@@ -8,6 +8,9 @@ used by the FastAPI application to run agent conversations.
 from __future__ import annotations
 
 import asyncio
+import ast
+from json import JSONDecodeError
+import json
 import logging
 from typing import Any
 
@@ -26,6 +29,10 @@ from agents.mcp import MCPServer
 
 from app.config import settings
 from app.tools import (
+    fetch_accounts_view,
+    fetch_bootstrap_view,
+    fetch_cards_view,
+    fetch_recent_activity_view,
     get_account_details,
     get_customer_overview,
     get_recent_transactions,
@@ -145,6 +152,58 @@ triage_agent = Agent(
 )
 
 
+bootstrap_view_agent = Agent(
+    name="Bootstrap View Agent",
+    model=settings.model,
+    instructions=(
+        "You prepare the authenticated user's home-page bootstrap payload. "
+        "Always call fetch_bootstrap_view exactly once and stop. "
+        "Do not add commentary or markdown."
+    ),
+    tools=[fetch_bootstrap_view],
+    tool_use_behavior="stop_on_first_tool",
+)
+
+
+accounts_view_agent = Agent(
+    name="Accounts View Agent",
+    model=settings.model,
+    instructions=(
+        "You prepare the authenticated user's accounts API response. "
+        "Always call fetch_accounts_view exactly once and stop. "
+        "Do not add commentary or markdown."
+    ),
+    tools=[fetch_accounts_view],
+    tool_use_behavior="stop_on_first_tool",
+)
+
+
+cards_view_agent = Agent(
+    name="Cards View Agent",
+    model=settings.model,
+    instructions=(
+        "You prepare the authenticated user's cards API response. "
+        "Always call fetch_cards_view exactly once and stop. "
+        "Do not add commentary or markdown."
+    ),
+    tools=[fetch_cards_view],
+    tool_use_behavior="stop_on_first_tool",
+)
+
+
+activity_view_agent = Agent(
+    name="Activity View Agent",
+    model=settings.model,
+    instructions=(
+        "You prepare the authenticated user's recent activity API response. "
+        "Always call fetch_recent_activity_view exactly once and stop. "
+        "Do not add commentary or markdown."
+    ),
+    tools=[fetch_recent_activity_view],
+    tool_use_behavior="stop_on_first_tool",
+)
+
+
 def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any]:
     """Return the runtime agent, optionally enriched with MCP server access."""
     if not mcp_servers:
@@ -177,6 +236,29 @@ def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any
 def build_session(conversation_id: str) -> SQLiteSession:
     """Create or reopen the persisted conversation session for one chat thread."""
     return SQLiteSession(conversation_id, str(CONVERSATIONS_DB_PATH))
+
+
+def _serialize_agent_output(payload: Any) -> dict[str, Any]:
+    """Convert endpoint-agent output into a JSON-serializable dictionary."""
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, str):
+        try:
+            decoded = json.loads(payload)
+        except JSONDecodeError as exc:
+            try:
+                decoded = ast.literal_eval(payload)
+            except (ValueError, SyntaxError) as literal_exc:
+                raise ValueError(f"Expected JSON object from agent output, got: {payload}") from literal_exc
+        if isinstance(decoded, dict):
+            return decoded
+    raise ValueError(f"Unsupported agent output type: {type(payload).__name__}")
+
+
+async def _run_ui_agent(agent: Agent[Any], prompt: str) -> dict[str, Any]:
+    """Run a UI endpoint agent and return its structured payload."""
+    result = await Runner.run(agent, prompt, max_turns=3)
+    return _serialize_agent_output(result.final_output)
 
 
 def _is_retryable_model_error(exc: Exception) -> bool:
@@ -227,3 +309,39 @@ async def run_banking_agent(
     if last_error is not None:
         raise last_error
     raise RuntimeError("The banking agent did not produce a response.")
+
+
+async def run_bootstrap_view_agent() -> dict[str, Any]:
+    """Run the bootstrap-view agent and return the structured payload."""
+    logger.info("Running bootstrap view agent.")
+    return await _run_ui_agent(
+        bootstrap_view_agent,
+        "Load the authenticated customer's bootstrap payload for the home page.",
+    )
+
+
+async def run_accounts_view_agent() -> dict[str, Any]:
+    """Run the accounts-view agent and return the structured payload."""
+    logger.info("Running accounts view agent.")
+    return await _run_ui_agent(
+        accounts_view_agent,
+        "Load the authenticated customer's accounts API payload.",
+    )
+
+
+async def run_cards_view_agent() -> dict[str, Any]:
+    """Run the cards-view agent and return the structured payload."""
+    logger.info("Running cards view agent.")
+    return await _run_ui_agent(
+        cards_view_agent,
+        "Load the authenticated customer's cards API payload.",
+    )
+
+
+async def run_activity_view_agent() -> dict[str, Any]:
+    """Run the activity-view agent and return the structured payload."""
+    logger.info("Running activity view agent.")
+    return await _run_ui_agent(
+        activity_view_agent,
+        "Load the authenticated customer's recent activity API payload.",
+    )

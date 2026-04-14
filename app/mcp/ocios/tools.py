@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from fastmcp import Context
 
-from . import ociclients
+from app.mcp.auth import ociclients
 
 try:
     from fastmcp.server.dependencies import get_access_token as _get_access_token  # type: ignore

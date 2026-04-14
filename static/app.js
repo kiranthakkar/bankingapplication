@@ -223,8 +223,8 @@ async function loadBootstrap() {
   const isOracle = data.data_source.startsWith("oracle");
 
   dataSourceHintEl.textContent = isOracle
-    ? "Uses Oracle banking data through SQLcl and agent handoffs."
-    : "Uses fallback demo banking data and agent handoffs.";
+    ? "Uses Oracle banking data through agent-backed API workflows."
+    : "Uses fallback demo banking data through agent-backed API workflows.";
 
   if (data.no_matching_account) {
     canLoadBankingDetails = false;

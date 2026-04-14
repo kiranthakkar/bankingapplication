@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from agents.mcp import MCPServerManager, MCPServerStdio
+from agents.mcp import MCPServerStdio
 
 from app.config import settings
 
@@ -53,12 +53,3 @@ def build_sqlcl_server() -> MCPServerStdio | None:
             "args": _resolve_sqlcl_args(),
         },
     )
-
-
-def build_sqlcl_manager() -> MCPServerManager | None:
-    """Return a manager that owns the SQLcl MCP server lifecycle."""
-    server = build_sqlcl_server()
-    if server is None:
-        return None
-    logger.debug("Creating standalone SQLcl MCP manager.")
-    return MCPServerManager([server], strict=False)

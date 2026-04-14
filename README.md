@@ -11,16 +11,20 @@ The application currently supports:
 
 - Browser-based login through OCI Identity Domain
 - A banking chat assistant with account, card, transaction, and transfer workflows
+- Agent-backed API workflows for dashboard bootstrap, accounts, cards, and recent activity
 - Oracle schema and seed scripts for sample banking data
 - SQLcl MCP integration so the agent can query Oracle as a source of truth
 - An authenticated OCI Object Storage MCP server for storing and reading statement documents
 - Lazy loading for accounts, cards, and recent activity so the home page can render faster
 - Session-backed login with persisted access tokens for authenticated Object Storage calls
+- SQLite-backed conversation persistence for multi-turn chat sessions
 
 Current state:
 
 - The home page initially loads only the customer snapshot
+- `/api/bootstrap`, `/api/accounts`, `/api/cards`, and `/api/activity` are served through dedicated endpoint agents that call one tool and return structured JSON
 - Accounts, cards, and recent activity are fetched on demand from separate API routes
+- `/api/chat` uses the triage banking agent with tool calling, specialist handoffs, and persisted conversation state
 - The statements page reads monthly statements, tax statements, and communications from OCI Object Storage
 - The statements page can generate demo statement files and store them in Object Storage for the logged-in customer
 - Statement objects are stored under `statements/<customer_id>/<category>/...`
@@ -37,13 +41,14 @@ Current state:
 - `app/data/`: Oracle-backed banking data access and data-layer errors
 - `app/data/statements.py`: statement storage and retrieval service backed by the Object Storage MCP server
 - `app/mcp/`: MCP server integrations, including SQLcl and OCI Object Storage
+- `app/mcp/auth/`: bearer-token verification and auth middleware for the Object Storage MCP server
 - `app/mcp/sql/`: SQLcl MCP integration
 - `app/mcp/ocios/`: OCI Object Storage FastMCP server and client wiring
-- `app/models/`: domain models
 - `app/tools/`: agent tool functions
 - `app/user_context.py`: authenticated-user context passed into the chat/tool path
 - `db/schema.sql`: Oracle schema creation
 - `db/seed.sql`: sample data load script
+- `db/seed_users_002_003.sql`: additional users, accounts, and transactions for `CUS-002` and `CUS-003`
 - `startbank.sh`: convenience script to start the FastAPI banking app with the local virtual environment
 - `sanitycheck.py`: quick OCI model connectivity test
 - `requirements.txt`: Python dependencies
@@ -190,7 +195,8 @@ The project reads configuration from `.env`.
 Notes:
 
 - The banking app forwards the logged-in user's bearer token to the Object Storage MCP server
-- The Object Storage MCP server uses token exchange and does not require `OCI_CONFIG_FILE`
+- The Object Storage MCP server validates the forwarded bearer token and uses OCI token exchange for downstream Object Storage access
+- The Object Storage MCP server does not require `OCI_CONFIG_FILE`
 - Statement files are organized by customer and category, for example `statements/CUS-001/monthly/2026-04-relationship-summary.txt`
 
 ### Application server
@@ -280,6 +286,7 @@ Then run:
 ```sql
 @/Users/kiranthakkar/Downloads/agentdemo/bankingapplication/db/schema.sql
 @/Users/kiranthakkar/Downloads/agentdemo/bankingapplication/db/seed.sql
+@/Users/kiranthakkar/Downloads/agentdemo/bankingapplication/db/seed_users_002_003.sql
 ```
 
 Validate the data:
@@ -294,6 +301,7 @@ Notes:
 
 - `schema.sql` creates the banking tables and indexes
 - `seed.sql` clears existing rows, inserts one sample customer, three sample accounts, two cards, and sample transactions
+- `seed_users_002_003.sql` adds `CUS-002` and `CUS-003` with their identity-domain-linked users, accounts, cards, and sample transactions
 - The seeded customer starts with placeholder identity data, so for real login testing you should update `bank_customers.identity_subject` and/or `bank_customers.email` to match the OCI user who signs in
 - If the tables already exist, rerunning `schema.sql` will fail on `CREATE TABLE`
 
