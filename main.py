@@ -188,26 +188,23 @@ class ChatResponse(BaseModel):
 
 
 @app.get("/", response_model=None)
-async def index(request: Request) -> FileResponse | RedirectResponse:
-    if not maybe_user(request):
-        logger.debug("Redirecting anonymous user from / to /login")
-        return RedirectResponse(url="/login", status_code=302)
+async def index(request: Request) -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/statements", response_model=None)
 async def statements_page(request: Request) -> FileResponse | RedirectResponse:
     if not maybe_user(request):
-        logger.debug("Redirecting anonymous user from /statements to /login")
-        return RedirectResponse(url="/login", status_code=302)
+        logger.debug("Redirecting anonymous user from /statements to /")
+        return RedirectResponse(url="/", status_code=302)
     return FileResponse(STATIC_DIR / "statements.html")
 
 
 @app.get("/profile", response_model=None)
 async def profile_page(request: Request) -> FileResponse | RedirectResponse:
     if not maybe_user(request):
-        logger.debug("Redirecting anonymous user from /profile to /login")
-        return RedirectResponse(url="/login", status_code=302)
+        logger.debug("Redirecting anonymous user from /profile to /")
+        return RedirectResponse(url="/", status_code=302)
     return FileResponse(STATIC_DIR / "profile.html")
 
 
@@ -215,8 +212,8 @@ async def profile_page(request: Request) -> FileResponse | RedirectResponse:
 async def analytics_page(request: Request) -> FileResponse | RedirectResponse:
     user = maybe_user(request)
     if not user:
-        logger.debug("Redirecting anonymous user from /analytics to /login")
-        return RedirectResponse(url="/login", status_code=302)
+        logger.debug("Redirecting anonymous user from /analytics to /")
+        return RedirectResponse(url="/", status_code=302)
     if not is_bank_manager(user):
         logger.info("Rejected non-manager access to /analytics for sub=%s", user.get("sub"))
         raise HTTPException(status_code=403, detail="Access restricted to bank managers.")
@@ -228,11 +225,14 @@ async def bank_logo() -> FileResponse:
     return FileResponse(LOGO_PATH)
 
 @app.get("/login", response_model=None)
-async def login_page(request: Request) -> FileResponse | RedirectResponse:
-    if maybe_user(request):
-        logger.debug("Redirecting authenticated user from /login to /")
-        return RedirectResponse(url="/", status_code=302)
-    return FileResponse(STATIC_DIR / "login.html")
+async def login_page(request: Request) -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/api/auth/status", response_model=None)
+async def auth_status(request: Request) -> dict:
+    """Return whether the current session is authenticated — never raises 401."""
+    return {"authenticated": maybe_user(request) is not None}
 
 
 @app.get("/auth/login", response_model=None)
@@ -256,7 +256,7 @@ async def auth_callback(request: Request) -> RedirectResponse:
         clear_access_token(request)
         clear_oidc_state(request)
         request.session.pop("user", None)
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/", status_code=302)
 
     clear_oidc_state(request)
     userinfo = await oauth.oci.userinfo(token=token)
@@ -320,7 +320,7 @@ async def auth_logout(request: Request) -> RedirectResponse:
         logger.info("Redirecting to OIDC end-session endpoint for federated logout.")
         return RedirectResponse(url=logout_url, status_code=302)
 
-    return RedirectResponse(url="/login", status_code=302)
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/api/auth/roles")

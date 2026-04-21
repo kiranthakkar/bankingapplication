@@ -58,7 +58,7 @@ function escapeHtml(value) {
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (response.status === 401) {
-    window.location.href = "/login";
+    window.location.href = "/auth/login";
     throw new Error("Authentication required.");
   }
 

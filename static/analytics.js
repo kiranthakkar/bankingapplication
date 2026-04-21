@@ -92,7 +92,7 @@
 
   async function apiFetch(path) {
     const response = await fetch(path);
-    if (response.status === 401) { window.location.href = "/login"; throw new Error("Authentication required."); }
+    if (response.status === 401) { window.location.href = "/auth/login"; throw new Error("Authentication required."); }
     if (response.status === 403) { throw new Error("Access restricted to bank managers."); }
     const text = await response.text();
     let data;
@@ -309,7 +309,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation_id: managerConversationId, message }),
       });
-      if (response.status === 401) { window.location.href = "/login"; return; }
+      if (response.status === 401) { window.location.href = "/auth/login"; return; }
       if (response.status === 403) { addManagerMessage("assistant", "Access denied. This chat is restricted to bank managers."); return; }
       const text = await response.text();
       let data = {};

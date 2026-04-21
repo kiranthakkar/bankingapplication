@@ -138,11 +138,37 @@ const tabConfig = {
   },
 };
 
+function setAuthButton(authenticated) {
+  const btn = document.getElementById("auth-action");
+  if (!btn) return;
+  if (authenticated) {
+    btn.textContent = "Sign out";
+    btn.href = "/auth/logout";
+  } else {
+    btn.textContent = "Sign in";
+    btn.href = "/auth/login";
+  }
+}
+
+function showUnauthenticatedState() {
+  setAuthButton(false);
+  summaryEl.innerHTML = `<div class="empty-state empty-state-inline">Sign in to view your account.</div>`;
+  Object.values(tabConfig).forEach((config) => {
+    renderPlaceholder(config.container, "Sign in to view banking details.");
+  });
+  inputEl.disabled = true;
+  inputEl.placeholder = "Sign in to start chatting...";
+  formEl.querySelector("button").disabled = true;
+  dataSourceHintEl.textContent = "";
+  addMessage("assistant", "Welcome to Agentic Banking Demo. Please sign in to access your account.");
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (response.status === 401) {
-    window.location.href = "/login";
-    throw new Error("Authentication required.");
+    const err = new Error("Authentication required.");
+    err.unauthenticated = true;
+    throw err;
   }
 
   const rawText = await response.text();
@@ -232,7 +258,32 @@ function setLoading(isLoading) {
 }
 
 async function loadBootstrap() {
-  const data = await window.loadBootstrapData();
+  try {
+    const statusResp = await fetch("/api/auth/status");
+    if (statusResp.ok) {
+      const { authenticated } = await statusResp.json();
+      if (!authenticated) {
+        if (window.clearBootstrapCache) window.clearBootstrapCache();
+        showUnauthenticatedState();
+        return;
+      }
+    }
+  } catch (_) {
+    // If status check fails, fall through and let bootstrap handle it.
+  }
+
+  let data;
+  try {
+    data = await window.loadBootstrapData();
+  } catch (error) {
+    if (error.unauthenticated) {
+      showUnauthenticatedState();
+      return;
+    }
+    throw error;
+  }
+
+  setAuthButton(true);
   const isOracle = data.data_source.startsWith("oracle");
 
   dataSourceHintEl.textContent = isOracle
@@ -341,7 +392,7 @@ formEl.addEventListener("submit", async (event) => {
 
     if (!response.ok) {
       if (response.status === 401) {
-        window.location.href = "/login";
+        window.location.href = "/auth/login";
         return;
       }
       throw new Error(data.detail || "Request failed");
@@ -358,6 +409,7 @@ formEl.addEventListener("submit", async (event) => {
 
 if (window.applyManagerNav) window.applyManagerNav();
 loadBootstrap().catch((error) => {
+  if (error.unauthenticated) return;
   summaryEl.innerHTML = `<div class="empty-state">${error.message}</div>`;
   addMessage("assistant", `Something went wrong: ${error.message}`);
 });

@@ -60,8 +60,9 @@
     const response = await fetch("/api/bootstrap");
     if (response.status === 401) {
       clearCache();
-      window.location.href = "/login";
-      throw new Error("Authentication required.");
+      const err = new Error("Authentication required.");
+      err.unauthenticated = true;
+      throw err;
     }
 
     const rawText = await response.text();
@@ -93,12 +94,11 @@
   }
 
   function bindLogoutCacheClear() {
-    const logoutLink = document.querySelector(".logout-link");
-    if (!logoutLink) {
+    const authAction = document.getElementById("auth-action");
+    if (!authAction) {
       return;
     }
-
-    logoutLink.addEventListener("click", () => {
+    authAction.addEventListener("click", () => {
       clearCache();
     });
   }
@@ -117,6 +117,7 @@
   }
 
   window.loadBootstrapData = loadBootstrapData;
+  window.clearBootstrapCache = clearCache;
   window.updateManagerNav = updateManagerNav;
   window.applyManagerNav = applyManagerNav;
 })();
