@@ -80,6 +80,18 @@
     return data;
   }
 
+  function updateManagerNav(data) {
+    const navLink = document.getElementById("nav-analytics");
+    if (!navLink) {
+      return;
+    }
+    if (data && data.is_bank_manager) {
+      navLink.removeAttribute("hidden");
+    } else {
+      navLink.setAttribute("hidden", "");
+    }
+  }
+
   function bindLogoutCacheClear() {
     const logoutLink = document.querySelector(".logout-link");
     if (!logoutLink) {
@@ -93,5 +105,18 @@
 
   bindLogoutCacheClear();
 
+  async function applyManagerNav() {
+    try {
+      const response = await fetch("/api/auth/roles");
+      if (!response.ok) return;
+      const data = await response.json();
+      updateManagerNav(data);
+    } catch (_error) {
+      // Silently ignore — nav link stays hidden on error.
+    }
+  }
+
   window.loadBootstrapData = loadBootstrapData;
+  window.updateManagerNav = updateManagerNav;
+  window.applyManagerNav = applyManagerNav;
 })();

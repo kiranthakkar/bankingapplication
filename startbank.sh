@@ -13,4 +13,9 @@ fi
 PORT="${PORT:-8000}"
 HOST="${HOST:-127.0.0.1}"
 
-exec ".venv/bin/uvicorn" main:app --reload --host "$HOST" --port "$PORT"
+RELOAD_FLAG=""
+if [[ "${APP_RELOAD:-true}" == "true" ]]; then
+  RELOAD_FLAG="--reload"
+fi
+
+exec ".venv/bin/uvicorn" main:app $RELOAD_FLAG --host "$HOST" --port "$PORT"

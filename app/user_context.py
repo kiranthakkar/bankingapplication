@@ -7,7 +7,7 @@ Oracle and tool lookups.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import Any
 
@@ -20,8 +20,8 @@ def get_authenticated_user() -> dict[str, Any] | None:
     return _current_user.get()
 
 
-@contextmanager
-def authenticated_user_scope(user: dict[str, Any]):
+@asynccontextmanager
+async def authenticated_user_scope(user: dict[str, Any]):
     """Temporarily bind the authenticated user for nested async operations."""
     token = _current_user.set(user)
     try:

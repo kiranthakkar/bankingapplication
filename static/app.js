@@ -26,8 +26,21 @@ const loadingTabs = {
   activity: false,
 };
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function renderPlaceholder(container, text) {
-  container.innerHTML = `<div class="empty-state">${text}</div>`;
+  const div = document.createElement("div");
+  div.className = "empty-state";
+  div.textContent = text;
+  container.innerHTML = "";
+  container.appendChild(div);
 }
 
 function formatMoney(amount) {
@@ -44,12 +57,12 @@ function renderAccounts(accounts) {
       (account) => `
         <article class="data-row">
           <div>
-            <strong>${account.name}</strong>
-            <span class="meta">${account.id} · ${account.kind}</span>
+            <strong>${escapeHtml(account.name)}</strong>
+            <span class="meta">${escapeHtml(account.id)} · ${escapeHtml(account.kind)}</span>
           </div>
           <div class="amount-block">
-            <strong>${formatMoney(account.balance)}</strong>
-            <span class="meta">${account.currency}</span>
+            <strong>${escapeHtml(formatMoney(account.balance))}</strong>
+            <span class="meta">${escapeHtml(account.currency)}</span>
           </div>
         </article>
       `
@@ -63,12 +76,12 @@ function renderCards(cards) {
       (card) => `
         <article class="data-row">
           <div>
-            <strong>${card.name}</strong>
-            <span class="meta">${card.network} · ${card.id}</span>
+            <strong>${escapeHtml(card.name)}</strong>
+            <span class="meta">${escapeHtml(card.network)} · ${escapeHtml(card.id)}</span>
           </div>
           <div class="amount-block">
-            <strong>•••• ${card.last4}</strong>
-            <span class="meta">${card.status}</span>
+            <strong>•••• ${escapeHtml(card.last4)}</strong>
+            <span class="meta">${escapeHtml(card.status)}</span>
           </div>
         </article>
       `
@@ -82,12 +95,12 @@ function renderActivity(activity) {
       (item) => `
         <article class="data-row">
           <div>
-            <strong>${item.description}</strong>
-            <span class="meta">${item.account_id} · ${item.posted_on}</span>
+            <strong>${escapeHtml(item.description)}</strong>
+            <span class="meta">${escapeHtml(item.account_id)} · ${escapeHtml(item.posted_on)}</span>
           </div>
           <div class="amount-block">
-            <strong class="${item.amount < 0 ? "negative" : "positive"}">${formatMoney(item.amount)}</strong>
-            <span class="meta">${item.category}</span>
+            <strong class="${item.amount < 0 ? "negative" : "positive"}">${escapeHtml(formatMoney(item.amount))}</strong>
+            <span class="meta">${escapeHtml(item.category)}</span>
           </div>
         </article>
       `
@@ -235,7 +248,7 @@ async function loadBootstrap() {
       </div>
       <div>
         <span class="label">User</span>
-        <strong>${data.user.email || data.user.preferred_username || data.user.name || "Profile"}</strong>
+        <strong>${escapeHtml(data.user.email || data.user.preferred_username || data.user.name || "Profile")}</strong>
       </div>
     `;
     renderPlaceholder(accountsEl, data.message || "No matching account found for the logged-in user.");
@@ -252,19 +265,19 @@ async function loadBootstrap() {
   summaryEl.innerHTML = `
     <div>
       <span class="label">Customer</span>
-      <strong>${customer.full_name}</strong>
+      <strong>${escapeHtml(customer.full_name)}</strong>
     </div>
     <div>
       <span class="label">Tier</span>
-      <strong>${customer.tier}</strong>
+      <strong>${escapeHtml(customer.tier)}</strong>
     </div>
     <div>
       <span class="label">Deposits</span>
-      <strong>$${snapshot.total_deposit_balances.toLocaleString()}</strong>
+      <strong>$${escapeHtml(snapshot.total_deposit_balances.toLocaleString())}</strong>
     </div>
     <div>
       <span class="label">Card Balance</span>
-      <strong>$${snapshot.credit_card_balance.toLocaleString()}</strong>
+      <strong>$${escapeHtml(snapshot.credit_card_balance.toLocaleString())}</strong>
     </div>
   `;
   Object.values(tabConfig).forEach((config) => {
@@ -343,6 +356,7 @@ formEl.addEventListener("submit", async (event) => {
   }
 });
 
+if (window.applyManagerNav) window.applyManagerNav();
 loadBootstrap().catch((error) => {
   summaryEl.innerHTML = `<div class="empty-state">${error.message}</div>`;
   addMessage("assistant", `Something went wrong: ${error.message}`);

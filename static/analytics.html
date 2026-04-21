@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analytics | Agentic Banking Demo</title>
+    <link rel="stylesheet" href="/static/styles.css?v=theme-20260420-3" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <div class="top-nav-brand">
+        <div class="top-nav-logo-wrap">
+          <img class="top-nav-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <span class="top-nav-title">Agentic Banking Demo</span>
+      </div>
+      <nav class="page-nav" aria-label="Application pages">
+        <a class="page-link" href="/">Dashboard</a>
+        <a class="page-link" href="/statements">Statements</a>
+        <a class="page-link" href="/profile">Profile</a>
+        <a class="page-link is-active" id="nav-analytics" href="/analytics">Analytics</a>
+      </nav>
+      <a class="logout-link" href="/auth/logout">Sign out</a>
+    </header>
+
+    <div class="page-shell">
+      <aside class="sidebar">
+        <p class="eyebrow">Bank Manager</p>
+        <p class="lede">
+          Analytics and reporting dashboard. View customer and account metrics across the entire bank.
+        </p>
+
+        <section class="snapshot-card">
+          <h2>Key Metrics</h2>
+          <div id="kpi-summary" class="snapshot-grid">
+            <div class="empty-state empty-state-inline">Loading metrics...</div>
+          </div>
+        </section>
+
+        <section class="snapshot-card">
+          <h2>Portfolio Overview</h2>
+          <div class="chart-wrap">
+            <canvas id="chart-kpi-donut" height="200"></canvas>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat-panel">
+        <div class="chat-header">
+          <div>
+            <p class="eyebrow">Analytics</p>
+            <h2>Bank Manager Dashboard</h2>
+          </div>
+        </div>
+
+        <section class="content-panel">
+          <div class="content-card">
+            <div class="tab-shell">
+              <div class="tab-list" role="tablist" aria-label="Analytics views">
+                <button id="tab-customers" class="tab-button is-active" type="button" role="tab" aria-selected="true">
+                  All Customers
+                </button>
+                <button id="tab-active" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Most Active
+                </button>
+                <button id="tab-dormant" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Dormant Accounts
+                </button>
+                <button id="tab-premium" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Premium Customers
+                </button>
+                <button id="tab-chat" class="tab-button" type="button" role="tab" aria-selected="false">
+                  Manager Chat
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="panel-customers" class="analytics-panel">
+            <div class="content-card">
+              <p class="eyebrow">Overview</p>
+              <h3>Customer Tiers</h3>
+              <div class="chart-wrap chart-wrap-bar">
+                <canvas id="chart-tiers"></canvas>
+              </div>
+            </div>
+            <div class="content-card stack-list" id="list-customers"></div>
+          </div>
+
+          <div id="panel-active" class="analytics-panel is-hidden">
+            <div class="content-card">
+              <p class="eyebrow">Last 30 days</p>
+              <h3>Most Active Accounts</h3>
+              <div class="chart-wrap chart-wrap-bar">
+                <canvas id="chart-active"></canvas>
+              </div>
+            </div>
+            <div class="content-card stack-list" id="list-active"></div>
+          </div>
+
+          <div id="panel-dormant" class="analytics-panel is-hidden">
+            <div class="content-card">
+              <p class="eyebrow">No activity in 90+ days</p>
+              <h3>Dormant Accounts by Balance</h3>
+              <div class="chart-wrap chart-wrap-bar">
+                <canvas id="chart-dormant"></canvas>
+              </div>
+            </div>
+            <div class="content-card stack-list" id="list-dormant"></div>
+          </div>
+
+          <div id="panel-premium" class="analytics-panel is-hidden">
+            <div class="content-card">
+              <p class="eyebrow">Gold · Premier · Platinum</p>
+              <h3>Premium Customer Balances</h3>
+              <div class="chart-wrap chart-wrap-bar">
+                <canvas id="chart-premium"></canvas>
+              </div>
+            </div>
+            <div class="content-card stack-list" id="list-premium"></div>
+          </div>
+
+          <div id="panel-chat" class="analytics-panel is-hidden">
+            <div id="manager-messages" class="messages"></div>
+            <form id="manager-chat-form" class="composer">
+              <textarea
+                id="manager-message-input"
+                rows="3"
+                placeholder="Ask about customers, accounts, activity, or analytics..."
+              ></textarea>
+              <div class="composer-actions">
+                <span class="hint">Manager-only analytics agent.</span>
+                <button type="submit">Send</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/chart.umd.min.js" defer></script>
+    <script src="/static/bootstrap-cache.js?v=theme-20260420-1" defer></script>
+    <script src="/static/analytics.js?v=theme-20260420-2" defer></script>
+  </body>
+</html>

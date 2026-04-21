@@ -58,7 +58,7 @@ async def get_account_details(account_id_or_name: str) -> dict:
 @function_tool
 async def get_recent_transactions(account_id_or_name: str, limit: int = 5) -> dict:
     """Return the most recent transactions for a specific account."""
-    transactions = await data_store.recent_transactions(account_id_or_name, limit=limit)
+    transactions = await data_store.recent_transactions(account_id_or_name, limit=min(limit, 50))
     if not transactions:
         return {"success": False, "message": f"No account matched '{account_id_or_name}'."}
     return {"success": True, "transactions": transactions}
@@ -79,7 +79,7 @@ async def fetch_cards_view() -> dict:
 @function_tool
 async def fetch_recent_activity_view(limit: int = 6) -> dict:
     """Return the exact recent-activity payload consumed by the activity tab."""
-    return {"recent_activity": await data_store.recent_activity(limit=limit)}
+    return {"recent_activity": await data_store.recent_activity(limit=min(limit, 50))}
 
 
 @function_tool

@@ -4,14 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Statements | Agentic Banking Demo</title>
-    <link rel="stylesheet" href="/static/styles.css?v=theme-20260413-3" />
+    <link rel="stylesheet" href="/static/styles.css?v=theme-20260420-3" />
   </head>
   <body>
+    <header class="top-nav">
+      <div class="top-nav-brand">
+        <div class="top-nav-logo-wrap">
+          <img class="top-nav-logo" src="/logo.png" alt="Bank logo" />
+        </div>
+        <span class="top-nav-title">Agentic Banking Demo</span>
+      </div>
+      <nav class="page-nav" aria-label="Application pages">
+        <a class="page-link" href="/">Dashboard</a>
+        <a class="page-link is-active" href="/statements">Statements</a>
+        <a class="page-link" href="/profile">Profile</a>
+        <a class="page-link" id="nav-analytics" href="/analytics" hidden>Analytics</a>
+      </nav>
+      <a class="logout-link" href="/auth/logout">Sign out</a>
+    </header>
+
     <div class="page-shell">
       <aside class="sidebar">
-        <div class="brand-lockup">
-          <img class="bank-logo" src="/logo.png" alt="Bank logo" />
-        </div>
         <p class="eyebrow">Agentic Banking Demo</p>
         <p class="lede">
           Review statement-related content for the signed-in customer from the same banking profile.
@@ -30,14 +43,6 @@
           <div>
             <p class="eyebrow">Statements</p>
             <h2>Statements Center</h2>
-          </div>
-          <div class="header-actions">
-            <nav class="page-nav" aria-label="Application pages">
-              <a class="page-link" href="/">Dashboard</a>
-              <a class="page-link is-active" href="/statements">Statements</a>
-              <a class="page-link" href="/profile">Profile</a>
-            </nav>
-            <a class="logout-link" href="/auth/logout">Sign out</a>
           </div>
         </div>
 
@@ -81,7 +86,7 @@
       </main>
     </div>
 
-    <script src="/static/bootstrap-cache.js?v=theme-20260413-3" defer></script>
-    <script src="/static/statements.js?v=theme-20260413-3" defer></script>
+    <script src="/static/bootstrap-cache.js?v=theme-20260420-1" defer></script>
+    <script src="/static/statements.js?v=theme-20260420-1" defer></script>
   </body>
 </html>

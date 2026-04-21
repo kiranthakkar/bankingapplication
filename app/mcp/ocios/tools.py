@@ -183,13 +183,14 @@ async def get_object(region: str, bucket_name: str, object_name: str, ctx: Conte
     )
 
 
-def delete_object(region: str, bucket_name: str, object_name: str) -> str:
+async def delete_object(region: str, bucket_name: str, object_name: str, ctx: Context) -> str:
     """Delete an object from a bucket.
 
     Args:
         region: OCI region identifier such as ``us-ashburn-1``.
         bucket_name: Target Object Storage bucket name.
         object_name: Full object key to delete.
+        ctx: FastMCP request context.
     """
     object_storage_client = ociclients.get_os_client(_get_access_token(), region)
     namespace_name = object_storage_client.get_namespace().data

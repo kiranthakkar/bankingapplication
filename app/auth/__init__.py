@@ -58,6 +58,8 @@ def _get_connection() -> sqlite3.Connection:
         connection.execute("alter table auth_tokens add column user_sub text")
     if "user_email" not in columns:
         connection.execute("alter table auth_tokens add column user_email text")
+    if "id_token" not in columns:
+        connection.execute("alter table auth_tokens add column id_token text")
     return connection
 
 
@@ -93,7 +95,11 @@ def clear_oidc_state(request: Request) -> None:
         request.session.pop(key, None)
 
 
-def store_access_token(request: Request, access_token: str | None) -> None:
+def store_access_token(
+    request: Request,
+    access_token: str | None,
+    id_token: str | None = None,
+) -> None:
     """Persist the latest bearer token and bind it to the current web session."""
     clear_access_token(request)
     if not access_token:
@@ -107,10 +113,11 @@ def store_access_token(request: Request, access_token: str | None) -> None:
     with _get_connection() as connection:
         connection.execute(
             """
-            insert or replace into auth_tokens (token_key, access_token, session_binding, user_sub, user_email)
-            values (?, ?, ?, ?, ?)
+            insert or replace into auth_tokens
+                (token_key, access_token, session_binding, user_sub, user_email, id_token)
+            values (?, ?, ?, ?, ?, ?)
             """,
-            (token_key, access_token, session_binding, user_sub, user_email),
+            (token_key, access_token, session_binding, user_sub, user_email, id_token),
         )
     request.session["access_token_key"] = token_key
     request.session["access_token_binding"] = session_binding
@@ -119,6 +126,27 @@ def store_access_token(request: Request, access_token: str | None) -> None:
         user_sub,
         user_email,
     )
+
+
+def get_id_token(request: Request) -> str | None:
+    """Return the id_token associated with the current browser session."""
+    token_key = request.session.get("access_token_key")
+    session_binding = request.session.get("access_token_binding")
+    with _get_connection() as connection:
+        row = None
+        if token_key:
+            row = connection.execute(
+                "select id_token from auth_tokens where token_key = ?",
+                (token_key,),
+            ).fetchone()
+        if not row and session_binding:
+            row = connection.execute(
+                "select id_token from auth_tokens where session_binding = ? order by rowid desc limit 1",
+                (session_binding,),
+            ).fetchone()
+    if row:
+        return str(row[0]) if row[0] else None
+    return None
 
 
 def get_access_token(request: Request) -> str | None:
@@ -171,6 +199,7 @@ __all__ = [
     "clear_oidc_state",
     "get_access_token",
     "get_current_user",
+    "get_id_token",
     "maybe_user",
     "oauth",
     "store_access_token",

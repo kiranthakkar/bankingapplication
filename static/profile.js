@@ -1,22 +1,31 @@
 const summaryEl = document.getElementById("customer-summary");
 const detailsEl = document.getElementById("profile-details");
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function renderProfileField(label, value) {
   return `
     <div class="profile-item">
-      <span class="label">${label}</span>
-      <strong>${value || "Not available"}</strong>
+      <span class="label">${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "Not available")}</strong>
     </div>
   `;
 }
 
 function renderSnapshot(data) {
   if (data.no_matching_account || !data.customer_summary) {
-    summaryEl.innerHTML = `
-      <div class="empty-state empty-state-inline">
-        ${data.message || "No matching account found for the logged-in user."}
-      </div>
-    `;
+    const div = document.createElement("div");
+    div.className = "empty-state empty-state-inline";
+    div.textContent = data.message || "No matching account found for the logged-in user.";
+    summaryEl.innerHTML = "";
+    summaryEl.appendChild(div);
     return;
   }
 
@@ -25,19 +34,19 @@ function renderSnapshot(data) {
   summaryEl.innerHTML = `
     <div>
       <span class="label">Customer</span>
-      <strong>${customer.full_name}</strong>
+      <strong>${escapeHtml(customer.full_name)}</strong>
     </div>
     <div>
       <span class="label">Tier</span>
-      <strong>${customer.tier}</strong>
+      <strong>${escapeHtml(customer.tier)}</strong>
     </div>
     <div>
       <span class="label">Deposits</span>
-      <strong>$${snapshot.total_deposit_balances.toLocaleString()}</strong>
+      <strong>$${escapeHtml(snapshot.total_deposit_balances.toLocaleString())}</strong>
     </div>
     <div>
       <span class="label">Card Balance</span>
-      <strong>$${snapshot.credit_card_balance.toLocaleString()}</strong>
+      <strong>$${escapeHtml(snapshot.credit_card_balance.toLocaleString())}</strong>
     </div>
   `;
 }
@@ -75,7 +84,12 @@ async function loadBootstrap() {
   ].join("");
 }
 
+if (window.applyManagerNav) window.applyManagerNav();
 loadBootstrap().catch((error) => {
-  summaryEl.innerHTML = `<div class="empty-state empty-state-inline">${error.message}</div>`;
+  const div = document.createElement("div");
+  div.className = "empty-state empty-state-inline";
+  div.textContent = error.message;
+  summaryEl.innerHTML = "";
+  summaryEl.appendChild(div);
   detailsEl.innerHTML = renderProfileField("Error", error.message);
 });

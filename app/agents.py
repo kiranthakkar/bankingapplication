@@ -28,6 +28,13 @@ from agents import (
 from agents.mcp import MCPServer
 
 from app.config import settings
+from app.tools.manager import (
+    list_all_customers,
+    get_most_active_accounts,
+    get_dormant_accounts,
+    get_premium_customers,
+    get_analytics_summary,
+)
 from app.tools import (
     fetch_accounts_view,
     fetch_bootstrap_view,
@@ -43,12 +50,16 @@ from app.tools import (
 )
 
 logger = logging.getLogger(__name__)
-settings.runtime_dir.mkdir(parents=True, exist_ok=True)
 CONVERSATIONS_DB_PATH = settings.runtime_dir / "conversations.db"
+
+_model_client_configured = False
 
 
 def configure_model_client() -> None:
     """Configure the Agents SDK for the OCI OpenAI-compatible endpoint."""
+    global _model_client_configured
+    if _model_client_configured:
+        return
     if not settings.oci_base_url or not settings.oci_api_key or not settings.oci_project:
         raise ValueError(
             "Missing required OCI configuration. Set OCI_BASE_URL, OCI_GENAI_API_KEY, and OCI_GENAI_PROJECT_ID in .env."
@@ -63,10 +74,8 @@ def configure_model_client() -> None:
     )
     set_default_openai_client(client, use_for_tracing=False)
     set_tracing_disabled(True)
+    _model_client_configured = True
     logger.info("Configured Agents SDK with OCI Responses API model=%s", settings.model)
-
-
-configure_model_client()
 
 
 COMMON_STYLE = (
@@ -116,7 +125,10 @@ payments_agent = Agent(
     instructions=(
         f"{COMMON_STYLE} "
         "Handle transfers and payment-related tasks. "
-        "Before using transfer_between_accounts, make sure the user gave an exact from_account_id, to_account_id, and amount. "
+        "TRANSFER SAFETY RULE: Before calling transfer_between_accounts you MUST (1) confirm exact from_account_id, to_account_id, and amount with the user, "
+        "(2) present a summary ('Transfer $X from Account A to Account B — shall I proceed?'), and "
+        "(3) only call the tool after the user explicitly replies with 'yes', 'confirm', 'proceed', or equivalent affirmative language in their next message. "
+        "Never call transfer_between_accounts based solely on the initial request, no matter how specific. "
         "If IDs are missing, ask a concise follow-up question and suggest calling list_accounts. "
         "After a successful transfer, mention the updated balances returned by the tool. "
         "When you ask follow-up questions, keep them short and specific."
@@ -204,6 +216,27 @@ activity_view_agent = Agent(
 )
 
 
+manager_agent = Agent(
+    name="Bank Manager Assistant",
+    model=settings.model,
+    instructions=(
+        "You are an analytics assistant exclusively for bank managers. "
+        "Use tools to answer questions about all customers, active accounts, dormant accounts, premium customers, and aggregate KPIs. "
+        "Always call a tool before answering — never invent numbers. "
+        "Present data in clear tables or bullet lists. "
+        "Do not discuss or reveal individual customer personal data beyond what is directly needed for manager reporting. "
+        "Do not assist with end-customer transactions, transfers, or card actions."
+    ),
+    tools=[
+        get_analytics_summary,
+        list_all_customers,
+        get_most_active_accounts,
+        get_dormant_accounts,
+        get_premium_customers,
+    ],
+)
+
+
 def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any]:
     """Return the runtime agent, optionally enriched with MCP server access."""
     if not mcp_servers:
@@ -214,7 +247,8 @@ def build_runtime_agent(mcp_servers: list[MCPServer] | None = None) -> Agent[Any
         "An Oracle Database is available through SQLcl MCP tools and should be treated as the source of truth "
         "for customer, account, card, and transaction data. "
         f"Start by using the SQLcl MCP tools to connect to the saved SQLcl connection named '{settings.sqlcl_connection_name}'. "
-        "Use read-only SQL for balance, card, and transaction lookups. "
+        "CRITICAL SQL RULE: Only use read-only SELECT statements through the SQLcl MCP tools. "
+        "Never issue INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or any other data-modification statement via SQLcl MCP. "
         "Prefer querying the tables BANK_CUSTOMERS, BANK_ACCOUNTS, BANK_CARDS, and BANK_TRANSACTIONS. "
         "OCI Object Storage MCP tools are also available for statement and document storage. "
         "When the user asks to create, store, or list statements or communications, you may generate concise statement content and use the object storage tools to upload or inspect stored objects. "
@@ -266,6 +300,9 @@ def _is_retryable_model_error(exc: Exception) -> bool:
     return isinstance(exc, (InternalServerError, APIConnectionError, APITimeoutError))
 
 
+_AGENT_TIMEOUT_SECONDS = 180.0
+
+
 async def run_banking_agent(
     conversation_id: str,
     message: str,
@@ -284,9 +321,22 @@ async def run_banking_agent(
 
     for attempt in range(1, 4):
         try:
-            result = await Runner.run(runtime_agent, message, session=session)
+            result = await asyncio.wait_for(
+                Runner.run(runtime_agent, message, session=session),
+                timeout=_AGENT_TIMEOUT_SECONDS,
+            )
             logger.info("Banking agent run succeeded conversation_id=%s attempt=%s", conversation_id, attempt)
             return str(result.final_output)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Banking agent run timed out after %.0fs conversation_id=%s attempt=%s",
+                _AGENT_TIMEOUT_SECONDS,
+                conversation_id,
+                attempt,
+            )
+            raise TimeoutError(
+                f"The agent did not respond within {int(_AGENT_TIMEOUT_SECONDS)} seconds. Please try again."
+            )
         except Exception as exc:
             last_error = exc
             if attempt == 3 or not _is_retryable_model_error(exc):
@@ -345,3 +395,55 @@ async def run_activity_view_agent() -> dict[str, Any]:
         activity_view_agent,
         "Load the authenticated customer's recent activity API payload.",
     )
+
+
+async def run_manager_agent(conversation_id: str, message: str) -> str:
+    """Run one manager-agent turn with retries for transient OCI model failures."""
+    session = build_session(conversation_id)
+    last_error: Exception | None = None
+    logger.info(
+        "Starting manager agent run conversation_id=%s message_chars=%s",
+        conversation_id,
+        len(message),
+    )
+
+    for attempt in range(1, 4):
+        try:
+            result = await asyncio.wait_for(
+                Runner.run(manager_agent, message, session=session),
+                timeout=_AGENT_TIMEOUT_SECONDS,
+            )
+            logger.info("Manager agent run succeeded conversation_id=%s attempt=%s", conversation_id, attempt)
+            return str(result.final_output)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Manager agent run timed out after %.0fs conversation_id=%s attempt=%s",
+                _AGENT_TIMEOUT_SECONDS,
+                conversation_id,
+                attempt,
+            )
+            raise TimeoutError(
+                f"The agent did not respond within {int(_AGENT_TIMEOUT_SECONDS)} seconds. Please try again."
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt == 3 or not _is_retryable_model_error(exc):
+                logger.info(
+                    "Manager agent run failed conversation_id=%s attempt=%s error=%s",
+                    conversation_id,
+                    attempt,
+                    type(exc).__name__,
+                )
+                raise
+            delay_seconds = float(attempt)
+            logger.warning(
+                "Transient OCI model failure during manager run; retrying attempt %s/3 in %.1fs: %s",
+                attempt + 1,
+                delay_seconds,
+                type(exc).__name__,
+            )
+            await asyncio.sleep(delay_seconds)
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("The manager agent did not produce a response.")

@@ -79,6 +79,7 @@ class Settings:
     oidc_client_id: str | None = _clean_env_value("OIDC_CLIENT_ID")
     oidc_client_secret: str | None = _clean_env_value("OIDC_CLIENT_SECRET")
     oidc_redirect_uri: str = _clean_env_value("OIDC_REDIRECT_URI") or "http://localhost:8000/auth/callback"
+    oidc_post_logout_uri: str = _clean_env_value("OIDC_POST_LOGOUT_URI") or "http://localhost:8000/login"
     oidc_scopes: str = _clean_env_value("OIDC_SCOPES") or "openid profile email"
     idcs_domain: str | None = _clean_env_value("IDCS_DOMAIN") or _host_from_url(
         _clean_env_value("OIDC_DISCOVERY_URL")
